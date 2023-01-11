@@ -1,5 +1,6 @@
 # Intel(R) MPI Benchmarks: IMB-ASYNC
-[![Common Public License Version 1.0](https://img.shields.io/badge/license-Common%20Public%20License%20Version%201.0-green.svg)](license/license.txt)
+[![3-Clause BSD License](https://img.shields.io/badge/License-BSD_3--Clause-green.svg)](license/license.txt)
+
 --------------------------------------------------
 
 The IMB-ASYNC benchmark suite is a collection of microbenchmark tools which
@@ -47,7 +48,7 @@ call MPI_Test() periodically. The "-spinperiod" parameter sets up how often to c
 Copyright and Licenses
 ----------------------
 
-This benchmark suite inherits Common Public License terms of Intel(R) MPI Benchmarks project, 
+This benchmark suite inherits 3-Clause BSD License terms of Intel(R) MPI Benchmarks project, 
 which it is based on.
 
 
