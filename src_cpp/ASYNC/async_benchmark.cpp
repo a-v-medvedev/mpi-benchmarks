@@ -263,6 +263,7 @@ namespace async_suite {
         const int tag = 1;
         auto comm_actions = topo->comm_actions();
         calc.num_requests = topo->get_num_actions();
+        assert(calc.num_requests <= MAX_REQUESTS_NUM);
         MPI_Request *requests;
         requests = (MPI_Request *)calloc(sizeof(MPI_Request), calc.num_requests);
         calc.reqs = requests;
@@ -298,10 +299,12 @@ namespace async_suite {
         return true;
     }
 
-#define EXTRA_BARRIER 0
+#ifndef ASYNC_EXTRA_BARRIER
+#define ASYNC_EXTRA_BARRIER 0
+#endif
 
     void barrier(int rank, int np) {
-#if !EXTRA_BARRIER
+#if !ASYNC_EXTRA_BARRIER
         (void)rank;
         (void)np;
         MPI_Barrier(MPI_COMM_WORLD);
@@ -336,7 +339,7 @@ namespace async_suite {
                 time += (t2 - t1);
             }
             barrier(rank, np);
-#if EXTRA_BARRIER
+#if ASYNC_EXTRA_BARRIER
             barrier(rank, np);
             barrier(rank, np);
             barrier(rank, np);
@@ -378,7 +381,7 @@ namespace async_suite {
                 total_tover_calc += local_tover_calc;
             }
             barrier(rank, np);
-#if EXTRA_BARRIER
+#if ASYNC_EXTRA_BARRIER
             barrier(rank, np);
             barrier(rank, np);
             barrier(rank, np);
@@ -416,7 +419,7 @@ namespace async_suite {
                 time += (t2 - t1);
             }
             barrier(rank, np);
-#if EXTRA_BARRIER
+#if ASYNC_EXTRA_BARRIER
             barrier(rank, np);
             barrier(rank, np);
             barrier(rank, np);
@@ -459,7 +462,7 @@ namespace async_suite {
                 total_tover_calc += local_tover_calc;
             }
             barrier(rank, np);
-#if EXTRA_BARRIER
+#if ASYNC_EXTRA_BARRIER
             barrier(rank, np);
             barrier(rank, np);
             barrier(rank, np);
@@ -574,8 +577,8 @@ namespace async_suite {
 
     // NOTE: to ensure just calc, no manual progress call it with iters_till_test == R
     // NOTE2: tover_comm is not zero'ed here before operation!
-    void AsyncBenchmark_calc::calc_and_progress_cycle(int R, int iters_till_test, double &tover_comm) {
-        for (int repeat = 0, cnt = iters_till_test; repeat < R; repeat++) {
+    void AsyncBenchmark_calc::calc_and_progress_cycle(int ncalccycles, int iters_till_test, double &tover_comm) {
+        for (int repeat = 0, cnt = iters_till_test; repeat < ncalccycles; repeat++) {
             if (--cnt == 0) { 
                 double t1 = MPI_Wtime();
                 if (reqs && num_requests) {
@@ -593,9 +596,9 @@ namespace async_suite {
                 tover_comm += (t2 - t1);
                 cnt = iters_till_test;
             } 
-            for (int i = 0; i < SIZE; i++) {
-                for (int j = 0; j < SIZE; j++) {
-                    for (int k = 0; k < SIZE; k++) {
+            for (size_t i = 0; i < CALC_MATRIX_SIZE; i++) {
+                for (size_t j = 0; j < CALC_MATRIX_SIZE; j++) {
+                    for (size_t k = 0; k < CALC_MATRIX_SIZE; k++) {
                         c[i][j] += a[i][k] * b[k][j] + repeat*repeat;
                     }
                 }
@@ -604,18 +607,22 @@ namespace async_suite {
         }
     }
 
+    void AsyncBenchmark_calc::calc_cycle(int ncalccycles, double &tover_comm) {
+        calc_and_progress_cycle(ncalccycles, ncalccycles, tover_comm);
+    }
+
     void AsyncBenchmark_calc::calibration() {
 		GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
 		int estcycles = p.get("calc_calibration").get_int("estimation_cycles");
         double timings[3];
         if (estcycles == 0) {
-            throw std::runtime_error("AsyncBenchmark_calc: either -cper10usec or -estcycles option is required.");
+            throw std::runtime_error("AsyncBenchmark_calc: either -cycles_per_10usec or -estcycles option is required.");
         }
-		int Nrep = (int)(4000000000ul / (unsigned long)(SIZE*SIZE*SIZE));
+		int Nrep = (int)(4000000000ul / (unsigned long)(CALC_MATRIX_SIZE*CALC_MATRIX_SIZE*CALC_MATRIX_SIZE));
 		for (int k = 0; k < 3 + estcycles; k++) {
 			double tover = 0;
 			double t1 = MPI_Wtime();
-			calc_and_progress_cycle(Nrep, Nrep, tover);
+			calc_cycle(Nrep, tover);
 			double t2 = MPI_Wtime();
 			if (k >= estcycles)
 				timings[k - estcycles] = t2 - t1;
@@ -626,7 +633,10 @@ namespace async_suite {
 					} else if (t2 - t1 > 0.001 && t2 - t1 < 0.5) {
 						Nrep = (int)((double)Nrep * 1.0 / (t2 - t1));
 					} else if (t2 - t1 < 0.001) {
-						assert(0 && "cper10usec: calibration cycle error: too little measuring time");
+                        std::cout << ">> cycles_per_10usec: too little measuring time."
+                                  << " You may increase CALC_MATRIX_SIZE constant." << std::endl;
+
+						assert(0 && "cycles_per_10usec: calibration cycle error: too little measuring time");
 					}
 				}
 			}
@@ -635,49 +645,49 @@ namespace async_suite {
 		if (tmedian < timings[2])
 			tmedian = std::min(std::max(timings[0], timings[1]), timings[2]);
 		double _10usec = 1.0e5;
-		int local_cper10usec = (int)((double)Nrep / (tmedian * _10usec) + 0.999);
-		MPI_Allreduce(&local_cper10usec, &cper10usec_avg, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-		MPI_Allreduce(&local_cper10usec, &cper10usec_min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-		MPI_Allreduce(&local_cper10usec, &cper10usec_max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-		cper10usec_avg /= np;
-		if (cper10usec_avg < 150 && cper10usec_avg > 10) {
+		int local_cycles_per_10usec = (int)((double)Nrep / (tmedian * _10usec) + 0.999);
+		MPI_Allreduce(&local_cycles_per_10usec, &cycles_per_10usec_avg, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(&local_cycles_per_10usec, &cycles_per_10usec_min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+		MPI_Allreduce(&local_cycles_per_10usec, &cycles_per_10usec_max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+		cycles_per_10usec_avg /= np;
+		if (cycles_per_10usec_avg < 150 && cycles_per_10usec_avg > 10) {
 			int hits = 0;
-			int local_hit = ((fabs((float)local_cper10usec - (float)cper10usec_avg) > 
-							 (float)cper10usec_avg/25.0) ? 0 : 1);
+			int local_hit = ((fabs((float)local_cycles_per_10usec - (float)cycles_per_10usec_avg) > 
+							 (float)cycles_per_10usec_avg/25.0) ? 0 : 1);
 			MPI_Allreduce(&local_hit, &hits, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 			if ((float)(np - hits) / (float)np > 0.1f) {
 				if (rank == 0) {
-					std::cout << ">> cper10usec: WARNING: many deviated values!" << std::endl;
+					std::cout << ">> cycles_per_10usec: WARNING: many deviated values!" << std::endl;
 					irregularity_level++;
 				}
 			}
-			if (cper10usec_min == 0 || hits == 0) {
+			if (cycles_per_10usec_min == 0 || hits == 0) {
 				if (rank == 0) {
-					std::cout << ">> cper10usec: WARNING: very strange and deviated calibration results" << std::endl;
+					std::cout << ">> cycles_per_10usec: WARNING: very strange and deviated calibration results" << std::endl;
 					irregularity_level += 2;
 				}
-			} else if (cper10usec_max / cper10usec_min >= 4 && cper10usec_avg / cper10usec_min >= 2) {
+			} else if (cycles_per_10usec_max / cycles_per_10usec_min >= 4 && cycles_per_10usec_avg / cycles_per_10usec_min >= 2) {
 				// exclude highly deviated values
-				int cleaned_local_cper10usec = (local_hit ? local_cper10usec : 0);
-				cper10usec_avg = 0;
-				MPI_Allreduce(&cleaned_local_cper10usec, &cper10usec_avg, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-				cper10usec_avg /= hits;
+				int cleaned_local_cycles_per_10usec = (local_hit ? local_cycles_per_10usec : 0);
+				cycles_per_10usec_avg = 0;
+				MPI_Allreduce(&cleaned_local_cycles_per_10usec, &cycles_per_10usec_avg, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+				cycles_per_10usec_avg /= hits;
 				irregularity_level++;
 			}
 		}
 #if 0                
 		char node[80];
 		gethostname(node, 80-1);
-		std::cout << ">> cper10usec: node: " << node << " time=" << tmedian << "; cpersec=" << (double)Nrep/tmedian << std::endl;
-		std::cout << ">> cper10usec: node: " << node << " cper10usec=" << cper10usec_avg << std::endl;
+		std::cout << ">> cycles_per_10usec: node: " << node << " time=" << tmedian << "; cpersec=" << (double)Nrep/tmedian << std::endl;
+		std::cout << ">> cycles_per_10usec: node: " << node << " cycles_per_10usec=" << cycles_per_10usec_avg << std::endl;
 #endif                
 		if (rank == 0) {
-			std::cout << ">> " << get_name() << ": average cper10usec=" << cper10usec_avg << " min/max=" 
-					  << cper10usec_min << "/" << cper10usec_max << std::endl;
-			if (cper10usec_avg > 150 || cper10usec_avg < 10) {
+			std::cout << ">> " << get_name() << ": average cycles_per_10usec=" << cycles_per_10usec_avg << " min/max=" 
+					  << cycles_per_10usec_min << "/" << cycles_per_10usec_max << std::endl;
+			if (cycles_per_10usec_avg > 150 || cycles_per_10usec_avg < 10) {
 				irregularity_level++;
-				std::cout << ">> cper10usec: NOTE: good value for cper10usec is [10, 150]."
-						  << " You may decrease or increase SIZE constant." << std::endl;
+				std::cout << ">> cycles_per_10usec: NOTE: good value for cycles_per_10usec is [10, 150]."
+						  << " You may decrease or increase CALC_MATRIX_SIZE constant." << std::endl;
 			}
 		}
         MPI_Barrier(MPI_COMM_WORLD);
@@ -704,9 +714,9 @@ namespace async_suite {
             is_gpu_calculations = false;
             is_manual_progress = false;
         }
-        for (int i = 0; i < SIZE; i++) {
+        for (size_t i = 0; i < CALC_MATRIX_SIZE; i++) {
             x[i] = y[i] = 0.;
-            for (int j=0; j< SIZE; j++) {
+            for (size_t j=0; j < CALC_MATRIX_SIZE; j++) {
                 a[i][j] = 1.;
             }
         }
@@ -715,7 +725,7 @@ namespace async_suite {
     bool AsyncBenchmark_calc::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
                                         double &time, double &tover_comm, double &tover_calc) {
 		GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
-        int real_cper10usec;
+        int real_cycles_per_10usec;
         (void)datatype;
         total_tests = 0;
         successful_tests = 0;
@@ -726,13 +736,13 @@ namespace async_suite {
             time = 0;
             return true;
         }
-        int cper10usec = p.get("workload").get_int("cycles_per_10usec");
+        int cycles_per_10usec = p.get("workload").get_int("cycles_per_10usec");
         double t1 = 0, t2 = 0;
-        if (cper10usec == 0) {
-            cper10usec = cper10usec_avg;
-            assert(cper10usec_avg != 0);
+        if (cycles_per_10usec == 0) {
+            cycles_per_10usec = cycles_per_10usec_avg;
+            assert(cycles_per_10usec_avg != 0);
         }
-        int R = calctime_by_len[count] * cper10usec / 10;
+        int ncalccycles = calctime_by_len[count] * cycles_per_10usec / 10;
         if (is_manual_progress && reqs) {
             for (int r = 0; r < num_requests; r++) {
                 stat[r] = 0;
@@ -740,33 +750,33 @@ namespace async_suite {
         }
         if (is_manual_progress) {
        	    int spinperiod = p.get("workload").get_int("spin_period");
-            const int cnt_for_mpi_test = std::max(spinperiod * cper10usec / 10, 1);
+            const int cnt_for_mpi_test = std::max(spinperiod * cycles_per_10usec / 10, 1);
             for (int i = 0; i < ncycles + nwarmup; i++) {
                 if (i == nwarmup) 
                     t1 = MPI_Wtime();
-                calc_and_progress_cycle(R, cnt_for_mpi_test, tover_comm);
+                calc_and_progress_cycle(ncalccycles, cnt_for_mpi_test, tover_comm);
             }
         } else {
             for (int i = 0; i < ncycles + nwarmup; i++) {
                 if (i == nwarmup) 
                     t1 = MPI_Wtime();
-                calc_and_progress_cycle(R, R, tover_comm);
+                calc_cycle(ncalccycles, tover_comm);
             }
         }
         t2 = MPI_Wtime();
         time = (t2 - t1);
-#if 1        
-        int pure_calc_time = int((time - tover_comm) * 1e6);
-        if (!pure_calc_time)
+        int pure_calc_time_in_usec = int((time - tover_comm) * 1e6);
+        constexpr double _10usec = 1e-5;
+        constexpr double _1usec = 1e-6;
+        if (!pure_calc_time_in_usec)
             return true;
-        real_cper10usec = R * 10 / pure_calc_time;
-        if (cper10usec && real_cper10usec) {
-            int R0 = pure_calc_time * cper10usec / 10;
-            tover_calc = (double)(R0 - R) / (double)real_cper10usec * 1e-5;
-            if (tover_calc < 1e6)
+        real_cycles_per_10usec = ncalccycles * 10 / pure_calc_time_in_usec;
+        if (cycles_per_10usec && real_cycles_per_10usec) {
+            int ncalccycles_expected = pure_calc_time_in_usec * cycles_per_10usec / 10;
+            tover_calc = (double)(ncalccycles_expected - ncalccycles) / (double)real_cycles_per_10usec * _10usec; 
+            if (tover_calc < _1usec)
                 tover_calc = 0;
         }
-#endif        
         return true;
     }
 
@@ -811,9 +821,9 @@ namespace async_suite {
         yaml_affinity.add("nthreads", nthreads);
         
         YamlOutputMaker yaml_calibration("calibration");
-        yaml_calibration.add("avg", calc.cper10usec_avg); 
-        yaml_calibration.add("min", calc.cper10usec_min); 
-        yaml_calibration.add("max", calc.cper10usec_max); 
+        yaml_calibration.add("avg", calc.cycles_per_10usec_avg); 
+        yaml_calibration.add("min", calc.cycles_per_10usec_min); 
+        yaml_calibration.add("max", calc.cycles_per_10usec_max); 
         yaml_calibration.add("irregularity", calc.irregularity_level); 
 
         WriteOutYaml(yaml_out, get_name(), {yaml_affinity, yaml_calibration});

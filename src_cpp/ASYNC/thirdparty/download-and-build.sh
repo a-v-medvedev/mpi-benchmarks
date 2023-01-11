@@ -26,9 +26,10 @@ function build() {
     cd build
     cmake -DBUILD_SHARED_LIBS=ON -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF .. -DCMAKE_INSTALL_PREFIX=$PWD/../../yaml-cpp
     make clean
-    make -j8
+    make -j
     make install
     cd ../..
+    [ -d yaml-cpp/lib64 -a ! -e yaml-cpp/lib ] && ln -s lib64 yaml-cpp/lib
 
     cd argsparser-$ARGSPARSER_VERSION && make && cd ..
 }

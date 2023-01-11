@@ -53,10 +53,12 @@ goods and services.
 class topohelper;
 
 namespace async_suite {
-
+    static constexpr size_t ASSUMED_CACHE_SIZE = 4 * 1024 * 1024;
+    static constexpr int MAX_REQUESTS_NUM = 10;
+    static constexpr size_t CALC_MATRIX_SIZE = 7;
     class AsyncBenchmark : public Benchmark {
         public:
-        const size_t ASSUMED_CACHE_SIZE = 4 * 1024 * 1024;
+//        const size_t ASSUMED_CACHE_SIZE = 4 * 1024 * 1024;
         struct result {
             bool done;
             double time;
@@ -83,7 +85,7 @@ namespace async_suite {
     class AsyncBenchmark_calc : public AsyncBenchmark {
         public:
         MPI_Request *reqs = nullptr;
-        int stat[10];
+        int stat[MAX_REQUESTS_NUM];
         int total_tests = 0;
         int successful_tests = 0;
         int num_requests = 0;
@@ -92,10 +94,12 @@ namespace async_suite {
         bool is_gpu_calculations = false;
         int irregularity_level = 0;
         std::map<int, int> calctime_by_len;
-        static const int SIZE = 7;
-        int cper10usec_avg = 0, cper10usec_min = 0, cper10usec_max = 0;
-        float a[SIZE][SIZE], b[SIZE][SIZE], c[SIZE][SIZE], x[SIZE], y[SIZE];
-        void calc_and_progress_cycle(int R, int iters_till_test, double &tover_comm);
+        //static const int SIZE = 7;
+        int cycles_per_10usec_avg = 0, cycles_per_10usec_min = 0, cycles_per_10usec_max = 0;
+        float a[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], b[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], 
+              c[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], x[CALC_MATRIX_SIZE], y[CALC_MATRIX_SIZE];
+        void calc_and_progress_cycle(int ncycles, int iters_till_test, double &tover_comm);
+        void calc_cycle(int ncycles, double &tover_comm);
         public:
         void calibration();
         virtual void init() override;
