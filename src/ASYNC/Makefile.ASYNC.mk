@@ -34,14 +34,10 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
+override CPPFLAGS += -DASYNC
+override CPPFLAGS += -IASYNC -D__USE_BSD
 
-all: IMB-ASYNC
+BECHMARK_SUITE_SRC += ASYNC/async_benchmark.cpp ASYNC/async_cuda.cu ASYNC/async_alloc.cpp ASYNC/async_sys.cpp
 
-IMB-ASYNC:
-	make -C src -f Makefile TARGET=ASYNC
-	@cp src/IMB-ASYNC .
-
-
-clean:
-	make -C src -f Makefile TARGET=ASYNC clean
-	rm -f IMB-ASYNC
+override CXXFLAGS += -IASYNC/thirdparty/include
+override LDFLAGS += -LASYNC/thirdparty/lib -Wl,-rpath=ASYNC/thirdparty/lib -Wl,-rpath=. -lyaml-cpp -largsparser

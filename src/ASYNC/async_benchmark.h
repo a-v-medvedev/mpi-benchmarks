@@ -1,51 +1,40 @@
 /*****************************************************************************
  *                                                                           *
  * Copyright 2016-2018 Intel Corporation.                                    *
+ * Copyright 2019-2023 Alexey V. Medvedev                                    *
  *                                                                           *
  *****************************************************************************
 
-This code is covered by the Community Source License (CPL), version
-1.0 as published by IBM and reproduced in the file "license.txt" in the
-"license" subdirectory. Redistribution in source and binary form, with
-or without modification, is permitted ONLY within the regulations
-contained in above mentioned license.
+   The 3-Clause BSD License
 
-Use of the name and trademark "Intel(R) MPI Benchmarks" is allowed ONLY
-within the regulations of the "License for Use of "Intel(R) MPI
-Benchmarks" Name and Trademark" as reproduced in the file
-"use-of-trademark-license.txt" in the "license" subdirectory.
+   Copyright (C) Intel, Inc. All rights reserved.
+   Copyright (C) 2019-2023 Alexey V. Medvedev. All rights reserved.
 
-THE PROGRAM IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OR
-CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED INCLUDING, WITHOUT
-LIMITATION, ANY WARRANTIES OR CONDITIONS OF TITLE, NON-INFRINGEMENT,
-MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Each Recipient is
-solely responsible for determining the appropriateness of using and
-distributing the Program and assumes all risks associated with its
-exercise of rights under this Agreement, including but not limited to
-the risks and costs of program errors, compliance with applicable
-laws, damage to or loss of data, programs or equipment, and
-unavailability or interruption of operations.
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are met:
 
-EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, NEITHER RECIPIENT NOR
-ANY CONTRIBUTORS SHALL HAVE ANY LIABILITY FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
-WITHOUT LIMITATION LOST PROFITS), HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OR
-DISTRIBUTION OF THE PROGRAM OR THE EXERCISE OF ANY RIGHTS GRANTED
-HEREUNDER, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
 
-EXPORT LAWS: THIS LICENSE ADDS NO RESTRICTIONS TO THE EXPORT LAWS OF
-YOUR JURISDICTION. It is licensee's responsibility to comply with any
-export regulations applicable in licensee's jurisdiction. Under
-CURRENT U.S. export regulations this software is eligible for export
-from the U.S. and can be downloaded by or otherwise exported or
-reexported worldwide EXCEPT to U.S. embargoed destinations which
-include Cuba, Iraq, Libya, North Korea, Iran, Syria, Sudan,
-Afghanistan and any other country to which the U.S. has embargoed
-goods and services.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
 
- ***************************************************************************
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "async_suite.h"
@@ -58,7 +47,6 @@ namespace async_suite {
     static constexpr size_t CALC_MATRIX_SIZE = 7;
     class AsyncBenchmark : public Benchmark {
         public:
-//        const size_t ASSUMED_CACHE_SIZE = 4 * 1024 * 1024;
         struct result {
             bool done;
             double time;
@@ -66,19 +54,28 @@ namespace async_suite {
 	        double overhead_calc;
             int ncycles;
         };
+        bool is_gpu = false;
+        bool is_cuda_aware = false;
         std::map<int, result> results;
-        char *sbuf, *rbuf;
-        int np, rank;
+        char *host_sbuf = nullptr, *host_rbuf = nullptr;
+        char *device_sbuf = nullptr, *device_rbuf = nullptr;
+        int np = 0, rank = 0;
         std::shared_ptr<topohelper> topo;
-        size_t allocated_size;
-        int dtsize;
+        size_t allocated_size = 0;
+        int dtsize = 0;
         public:
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) = 0;
         virtual void run(const scope_item &item) override; 
         virtual void finalize() override;
         virtual size_t buf_size_multiplier() { return 1; }
-        AsyncBenchmark() : sbuf(nullptr), rbuf(nullptr), np(0), rank(0), allocated_size(0), dtsize(0) {}
+
+        char *get_sbuf();
+        char *get_rbuf();
+        void update_sbuf(size_t off, size_t size);
+        void update_rbuf(size_t off, size_t size);
+            
+        AsyncBenchmark() {}
         virtual ~AsyncBenchmark(); 
     };
 
@@ -94,7 +91,6 @@ namespace async_suite {
         bool is_gpu_calculations = false;
         int irregularity_level = 0;
         std::map<int, int> calctime_by_len;
-        //static const int SIZE = 7;
         int cycles_per_10usec_avg = 0, cycles_per_10usec_min = 0, cycles_per_10usec_max = 0;
         float a[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], b[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], 
               c[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], x[CALC_MATRIX_SIZE], y[CALC_MATRIX_SIZE];
@@ -171,7 +167,7 @@ namespace async_suite {
     class AsyncBenchmark_rma_pt2pt : public AsyncBenchmark {
         public:
         MPI_Win win;
-        char *win_buf;
+        char *win_buf = nullptr;
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         virtual ~AsyncBenchmark_rma_pt2pt();
@@ -183,7 +179,7 @@ namespace async_suite {
         public:
         AsyncBenchmark_calc calc;
         MPI_Win win;
-        char *win_buf;
+        char *win_buf = nullptr;
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         virtual ~AsyncBenchmark_rma_ipt2pt();

@@ -1,51 +1,40 @@
 /*****************************************************************************
  *                                                                           *
  * Copyright 2016-2018 Intel Corporation.                                    *
+ * Copyright 2019-2023 Alexey V. Medvedev                                    *
  *                                                                           *
  *****************************************************************************
 
-This code is covered by the Community Source License (CPL), version
-1.0 as published by IBM and reproduced in the file "license.txt" in the
-"license" subdirectory. Redistribution in source and binary form, with
-or without modification, is permitted ONLY within the regulations
-contained in above mentioned license.
+   The 3-Clause BSD License
 
-Use of the name and trademark "Intel(R) MPI Benchmarks" is allowed ONLY
-within the regulations of the "License for Use of "Intel(R) MPI
-Benchmarks" Name and Trademark" as reproduced in the file
-"use-of-trademark-license.txt" in the "license" subdirectory.
+   Copyright (C) Intel, Inc. All rights reserved.
+   Copyright (C) 2019-2023 Alexey V. Medvedev. All rights reserved.
 
-THE PROGRAM IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OR
-CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED INCLUDING, WITHOUT
-LIMITATION, ANY WARRANTIES OR CONDITIONS OF TITLE, NON-INFRINGEMENT,
-MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Each Recipient is
-solely responsible for determining the appropriateness of using and
-distributing the Program and assumes all risks associated with its
-exercise of rights under this Agreement, including but not limited to
-the risks and costs of program errors, compliance with applicable
-laws, damage to or loss of data, programs or equipment, and
-unavailability or interruption of operations.
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are met:
 
-EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, NEITHER RECIPIENT NOR
-ANY CONTRIBUTORS SHALL HAVE ANY LIABILITY FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
-WITHOUT LIMITATION LOST PROFITS), HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OR
-DISTRIBUTION OF THE PROGRAM OR THE EXERCISE OF ANY RIGHTS GRANTED
-HEREUNDER, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
 
-EXPORT LAWS: THIS LICENSE ADDS NO RESTRICTIONS TO THE EXPORT LAWS OF
-YOUR JURISDICTION. It is licensee's responsibility to comply with any
-export regulations applicable in licensee's jurisdiction. Under
-CURRENT U.S. export regulations this software is eligible for export
-from the U.S. and can be downloaded by or otherwise exported or
-reexported worldwide EXCEPT to U.S. embargoed destinations which
-include Cuba, Iraq, Libya, North Korea, Iran, Syria, Sudan,
-Afghanistan and any other country to which the U.S. has embargoed
-goods and services.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
 
- ***************************************************************************
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "async_benchmark.h"
@@ -53,29 +42,37 @@ goods and services.
 #include "async_average.h"
 #include "async_topology.h"
 #include "async_yaml.h"
+#include "async_cuda.h"
 
 namespace async_suite {
-
     void AsyncBenchmark::init() {
         GET_PARAMETER(std::vector<int>, len);
         GET_PARAMETER(MPI_Datatype, datatype);
+        GET_PARAMETER(gpu_mode_t, gpu_mode);
+        GET_PARAMETER(sys::host_alloc_t, host_alloc_mode);
+        is_gpu = (gpu_mode == gpu_mode_t::OFF ? false : true);
+        is_cuda_aware = (gpu_mode == gpu_mode_t::CUDAAWARE);
         scope = std::make_shared<VarLenScope>(len);
         MPI_Type_size(datatype, &dtsize);
         size_t size_to_alloc = (size_t)scope->get_max_len() * (size_t)dtsize * buf_size_multiplier();
         if (size_to_alloc <= ASSUMED_CACHE_SIZE * 3)
             size_to_alloc = ASSUMED_CACHE_SIZE * 3;
-        rbuf = (char *)calloc(size_to_alloc, 1);
-        sbuf = (char *)calloc(size_to_alloc, 1);
-        if (rbuf == nullptr || sbuf == nullptr)
+        sys::host_mem_alloc(host_sbuf, size_to_alloc, host_alloc_mode);
+        sys::host_mem_alloc(host_rbuf, size_to_alloc, host_alloc_mode);
+        if (host_rbuf == nullptr || host_sbuf == nullptr)
             throw std::runtime_error("AsyncBenchmark: memory allocation error.");
+        if (is_gpu) {
+            sys::device_mem_alloc(device_sbuf, size_to_alloc, sys::device_alloc_t::DA_CUDA);
+            sys::device_mem_alloc(device_rbuf, size_to_alloc, sys::device_alloc_t::DA_CUDA);
+            if (device_rbuf == nullptr || device_sbuf == nullptr)
+                throw std::runtime_error("AsyncBenchmark: device memory allocation error.");
+        }
         allocated_size = size_to_alloc;
         MPI_Comm_size(MPI_COMM_WORLD, &np);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     }
 
     AsyncBenchmark::~AsyncBenchmark() {
-        free(rbuf);
-        free(sbuf);
     }
 
     void AsyncBenchmark_pt2pt::init() {
@@ -125,7 +122,7 @@ namespace async_suite {
         // NOTE: the window buffer is 2 times as much since we have different
         // space for get and put operations
         win_buf = (char *)calloc(size_to_alloc * 2, 1);
-        MPI_Win_create(sbuf, allocated_size * 2, dtsize, MPI_INFO_NULL,
+        MPI_Win_create(get_sbuf(), allocated_size * 2, dtsize, MPI_INFO_NULL,
                        MPI_COMM_WORLD, &win);
     }
 
@@ -138,17 +135,54 @@ namespace async_suite {
         // NOTE: the window buffer is 2 times as much since we have different
         // space for get and put operations
         win_buf = (char *)calloc(size_to_alloc * 2, 1);
-        MPI_Win_create(sbuf, allocated_size * 2, dtsize, MPI_INFO_NULL,
+        MPI_Win_create(get_sbuf(), allocated_size * 2, dtsize, MPI_INFO_NULL,
                        MPI_COMM_WORLD, &win);
     }
+
+    char *AsyncBenchmark::get_sbuf() { 
+        if (!is_cuda_aware) {
+            return host_sbuf;
+        } else {
+            return device_sbuf;
+        }
+    }
+
+    char *AsyncBenchmark::get_rbuf() { 
+        if (!is_cuda_aware) {
+            return host_rbuf;
+        } else {
+            return device_rbuf;
+        }
+    }
+
+    void AsyncBenchmark::update_sbuf(size_t off, size_t size) { 
+        if (!is_gpu)
+            return;
+        if (!is_cuda_aware) {
+            sys::cuda::d2h_transfer((char *)host_sbuf + off, device_sbuf, size);
+        }
+    }
+
+    void AsyncBenchmark::update_rbuf(size_t off, size_t size) { 
+        if (!is_gpu)
+            return;
+        if (!is_cuda_aware) {
+            sys::cuda::h2d_transfer((char *)device_rbuf, host_rbuf + off, size);
+        }
+    }
+
 
     void AsyncBenchmark::run(const scope_item &item) { 
         GET_PARAMETER(MPI_Datatype, datatype);
         GET_PARAMETER(std::vector<int>, ncycles);
         GET_PARAMETER(std::vector<int>, len);
         GET_PARAMETER(int, nwarmup);
-        assert(len.size() != 0);
-        assert(ncycles.size() != 0);
+        if (len.size() == 0) {
+            throw std::runtime_error("AsyncBenchmark: wrong len parameter");
+        }
+        if (ncycles.size() == 0) {
+            throw std::runtime_error("AsyncBenchmark: wrong ncycles parameter");
+        }
         int item_ncycles = ncycles[0];
         for (size_t i =0; i < len.size(); i++) {
             if (item.len == (size_t)len[i]) {
@@ -208,6 +242,13 @@ namespace async_suite {
         yaml_topo.add("np", np);
         //yaml_topo.add("stride", stride);
         WriteOutYaml(yaml_out, get_name(), {yaml_tavg, yaml_over_full, yaml_topo});
+
+        // NOTE: can't free pinned memory in destructor, CUDA runtime complains
+        // it's too late
+        sys::host_mem_free(host_sbuf, host_alloc_mode);
+        sys::host_mem_free(host_rbuf, host_alloc_mode);
+        sys::device_mem_free(device_sbuf, sys::device_alloc_t::DA_CUDA);
+        sys::device_mem_free(device_rbuf, sys::device_alloc_t::DA_CUDA);
     }
 
     AsyncBenchmark_rma_pt2pt::~AsyncBenchmark_rma_pt2pt() {
@@ -236,9 +277,9 @@ namespace async_suite {
             for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
                 int rank = comm_actions[commstage].rank;
                 if (comm_actions[commstage].action == action_t::SEND) {
-                    MPI_Send((char*)sbuf + (i%n)*b, count, datatype, rank, tag, MPI_COMM_WORLD);
+                    MPI_Send(get_sbuf() + (i%n)*b, count, datatype, rank, tag, MPI_COMM_WORLD);
                 } else if (comm_actions[commstage].action == action_t::RECV) {
-                    MPI_Recv((char*)rbuf + (i%n)*b, count, datatype, rank, MPI_ANY_TAG, 
+                    MPI_Recv(get_rbuf() + (i%n)*b, count, datatype, rank, MPI_ANY_TAG, 
                              MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
             }
@@ -263,7 +304,9 @@ namespace async_suite {
         const int tag = 1;
         auto comm_actions = topo->comm_actions();
         calc.num_requests = topo->get_num_actions();
-        assert(calc.num_requests <= MAX_REQUESTS_NUM);
+        if (calc.num_requests > MAX_REQUESTS_NUM) {
+            throw std::runtime_error("AsyncBenchmark_ipt2pt: MAX_REQUESTS_NUM is too little for the topology");         
+        }
         MPI_Request *requests;
         requests = (MPI_Request *)calloc(sizeof(MPI_Request), calc.num_requests);
         calc.reqs = requests;
@@ -273,10 +316,10 @@ namespace async_suite {
                 int rank = comm_actions[commstage].rank;
                 if (i == nwarmup) t1 = MPI_Wtime();
                 if (comm_actions[commstage].action == action_t::SEND) {
-                    MPI_Isend((char*)sbuf  + (i%n)*b, count, datatype, rank, tag, MPI_COMM_WORLD, 
+                    MPI_Isend(get_sbuf()  + (i%n)*b, count, datatype, rank, tag, MPI_COMM_WORLD, 
                               &requests[nr++]);
                 } else if (comm_actions[commstage].action == action_t::RECV) {
-                    MPI_Irecv((char*)rbuf + (i%n)*b, count, datatype, rank, MPI_ANY_TAG, MPI_COMM_WORLD, 
+                    MPI_Irecv(get_rbuf() + (i%n)*b, count, datatype, rank, MPI_ANY_TAG, MPI_COMM_WORLD, 
                               &requests[nr++]);
                 }
             }
@@ -333,7 +376,7 @@ namespace async_suite {
         double t1 = 0, t2 = 0;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
-            MPI_Allreduce((char *)sbuf + (i%n)*b, (char *)rbuf + (i%n)*b, count, datatype, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(get_sbuf() + (i%n)*b, get_rbuf() + (i%n)*b, count, datatype, MPI_SUM, MPI_COMM_WORLD);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -370,7 +413,7 @@ namespace async_suite {
 	    MPI_Status  status;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
-            MPI_Iallreduce((char *)sbuf + (i%n)*b, (char *)rbuf + (i%n)*b, count, datatype, MPI_SUM, MPI_COMM_WORLD, request);
+            MPI_Iallreduce(get_sbuf() + (i%n)*b, get_rbuf() + (i%n)*b, count, datatype, MPI_SUM, MPI_COMM_WORLD, request);
             calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_tover_calc);
             MPI_Wait(request, &status);
             if (i >= nwarmup) {
@@ -411,8 +454,8 @@ namespace async_suite {
         double t1 = 0, t2 = 0;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
-            MPI_Neighbor_alltoall((char *)sbuf + (i%n)*b, count, datatype,
-                                  (char *)rbuf + (i%n)*b, count, datatype,
+            MPI_Neighbor_alltoall(get_sbuf() + (i%n)*b, count, datatype,
+                                  get_rbuf() + (i%n)*b, count, datatype,
                                   graph_comm);            
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
@@ -449,8 +492,8 @@ namespace async_suite {
 	    MPI_Status  status;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
-            MPI_Ineighbor_alltoall((char *)sbuf + (i%n)*b, count, datatype,
-                                   (char *)rbuf + (i%n)*b, count, datatype,
+            MPI_Ineighbor_alltoall(get_sbuf() + (i%n)*b, count, datatype,
+                                   get_rbuf() + (i%n)*b, count, datatype,
                                    graph_comm, request);
             calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_tover_calc);
             MPI_Wait(request, &status);
@@ -496,9 +539,9 @@ namespace async_suite {
                 int rank = comm_actions[commstage].rank;
                 MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
                 if (comm_actions[commstage].action == action_t::RECV) {
-                    MPI_Get((char*)rbuf + (i%n)*b, count, datatype, rank, (i%n)*b/dtsize, count, datatype, win);
+                    MPI_Get(get_rbuf() + (i%n)*b, count, datatype, rank, (i%n)*b/dtsize, count, datatype, win);
                 } else if (comm_actions[commstage].action == action_t::SEND) {
-                    MPI_Put((char*)sbuf + (i%n)*b, count, datatype, rank, (i%n)*b/dtsize, count, datatype, win);
+                    MPI_Put(get_sbuf() + (i%n)*b, count, datatype, rank, (i%n)*b/dtsize, count, datatype, win);
                 }
                 MPI_Win_unlock(rank, win);
             }
@@ -543,10 +586,10 @@ namespace async_suite {
                     lock_ranks[r] = true;
                 }
                 if (comm_actions[commstage].action == action_t::RECV) {
-                    MPI_Rget((char*)rbuf + (i%n)*b, count, datatype, r, (i%n)*b/dtsize, 
+                    MPI_Rget(get_rbuf() + (i%n)*b, count, datatype, r, (i%n)*b/dtsize, 
                             count, datatype, win, &requests[nr++]);
                 } else if (comm_actions[commstage].action == action_t::SEND) {
-                    MPI_Rput((char*)sbuf + (i%n)*b, count, datatype, r, (i%n)*b/dtsize, 
+                    MPI_Rput(get_sbuf() + (i%n)*b, count, datatype, r, (i%n)*b/dtsize, 
                             count, datatype, win, &requests[nr++]);
                 }
             }
@@ -636,7 +679,7 @@ namespace async_suite {
                         std::cout << ">> cycles_per_10usec: too little measuring time."
                                   << " You may increase CALC_MATRIX_SIZE constant." << std::endl;
 
-						assert(0 && "cycles_per_10usec: calibration cycle error: too little measuring time");
+						throw std::runtime_error("cycles_per_10usec: calibration cycle error: too little measuring time");
 					}
 				}
 			}
@@ -740,7 +783,9 @@ namespace async_suite {
         double t1 = 0, t2 = 0;
         if (cycles_per_10usec == 0) {
             cycles_per_10usec = cycles_per_10usec_avg;
-            assert(cycles_per_10usec_avg != 0);
+            if (cycles_per_10usec_avg == 0) {
+                throw std::runtime_error("AsyncBenchmark_calc: failure in cycles_per_10usec_avg estimation"); (cycles_per_10usec_avg != 0);
+            }
         }
         int ncalccycles = calctime_by_len[count] * cycles_per_10usec / 10;
         if (is_manual_progress && reqs) {

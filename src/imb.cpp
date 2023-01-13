@@ -1,52 +1,42 @@
 /*****************************************************************************
  *                                                                           *
  * Copyright 2016-2018 Intel Corporation.                                    *
+ * Copyright 2019-2023 Alexey V. Medvedev                                    *
  *                                                                           *
  *****************************************************************************
 
-This code is covered by the Community Source License (CPL), version
-1.0 as published by IBM and reproduced in the file "license.txt" in the
-"license" subdirectory. Redistribution in source and binary form, with
-or without modification, is permitted ONLY within the regulations
-contained in above mentioned license.
+   The 3-Clause BSD License
 
-Use of the name and trademark "Intel(R) MPI Benchmarks" is allowed ONLY
-within the regulations of the "License for Use of "Intel(R) MPI
-Benchmarks" Name and Trademark" as reproduced in the file
-"use-of-trademark-license.txt" in the "license" subdirectory.
+   Copyright (C) Intel, Inc. All rights reserved.
+   Copyright (C) 2019-2023 Alexey V. Medvedev. All rights reserved.
 
-THE PROGRAM IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OR
-CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED INCLUDING, WITHOUT
-LIMITATION, ANY WARRANTIES OR CONDITIONS OF TITLE, NON-INFRINGEMENT,
-MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Each Recipient is
-solely responsible for determining the appropriateness of using and
-distributing the Program and assumes all risks associated with its
-exercise of rights under this Agreement, including but not limited to
-the risks and costs of program errors, compliance with applicable
-laws, damage to or loss of data, programs or equipment, and
-unavailability or interruption of operations.
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are met:
 
-EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, NEITHER RECIPIENT NOR
-ANY CONTRIBUTORS SHALL HAVE ANY LIABILITY FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
-WITHOUT LIMITATION LOST PROFITS), HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OR
-DISTRIBUTION OF THE PROGRAM OR THE EXERCISE OF ANY RIGHTS GRANTED
-HEREUNDER, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
 
-EXPORT LAWS: THIS LICENSE ADDS NO RESTRICTIONS TO THE EXPORT LAWS OF
-YOUR JURISDICTION. It is licensee's responsibility to comply with any
-export regulations applicable in licensee's jurisdiction. Under
-CURRENT U.S. export regulations this software is eligible for export
-from the U.S. and can be downloaded by or otherwise exported or
-reexported worldwide EXCEPT to U.S. embargoed destinations which
-include Cuba, Iraq, Libya, North Korea, Iran, Syria, Sudan,
-Afghanistan and any other country to which the U.S. has embargoed
-goods and services.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
 
- ***************************************************************************
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
 */
+
 
 #include <mpi.h>
 #include <stdexcept>
@@ -61,8 +51,6 @@ goods and services.
 #include "scope.h"
 #include "benchmark_suite.h"
 
-//using namespace std;
-
 extern void check_parser();
 
 int main(int argc, char * *argv)
@@ -73,13 +61,6 @@ int main(int argc, char * *argv)
     const char *program_name = "Intel(R) MPI Benchmarks 2019";
     std::ostringstream output;
 
-    // Some unit tests for args parser
-#if 0
-    check_parser();
-    return 1;
-#endif    
-
-    
     try {
         // Allow very first init steps for each suite -- each benchmark
         // is allowed to init flags and do other fundamental things before MPI_Init and
@@ -87,8 +68,6 @@ int main(int argc, char * *argv)
         BenchmarkSuitesCollection::init_registered_suites();
 
         // Do basic initialisation of expected args
-        //args_parser parser(argc, argv, "/", ':');
-        //args_parser parser(argc, argv, "--", '=');
         args_parser parser(argc, argv, "-", ' ', output);
 
         parser.set_program_name(program_name);
@@ -104,7 +83,8 @@ int main(int argc, char * *argv)
                    "multiple: MPI_Init_thread with MPI_THREAD_MULTIPLE\n"
                    "nompiinit: don't call MPI_Init (the MPI_Init call may be made then in error case\n"
                    "to prevent rubbish output\n");
-        parser.add<std::string>("input", "").set_caption("filename").
+        parser.add<std::string>("input", "").
+               set_caption("filename").
                set_description(
                    "The argument after -input is a filename is any text file containing, line by line,\n" 
                    "benchmark names facilitates running particular benchmarks as compared to\n"
@@ -113,9 +93,11 @@ int main(int argc, char * *argv)
                    "default:\n"
                    "no input file exists\n");
 
-        parser.add_vector<std::string>("include", "").set_caption("benchmark[,benchmark,[...]").
+        parser.add_vector<std::string>("include", "").
+               set_caption("benchmark[,benchmark,[...]").
                set_description("The argument after -include is one or more benchmark names separated by comma");
-        parser.add_vector<std::string>("exclude", "").set_caption("benchmark[,benchmark,[...]").
+        parser.add_vector<std::string>("exclude", "").
+               set_caption("benchmark[,benchmark,[...]").
                set_description("The argument after -exclude is one or more benchmark names separated by comma");
 
         // Extra non-option arguments 
@@ -132,14 +114,17 @@ int main(int argc, char * *argv)
         // "system" option args to do special things, not dumped to files
         parser.set_current_group("SYS");
 #ifdef WITH_YAML_CPP        
-        parser.add<std::string>("dump", "").set_caption("config.yaml").
+        parser.add<std::string>("dump", "").
+               set_caption("config.yaml").
                set_description(
                    "Dump the YAML config file with the set of actual options for\n"
                    "the benchmark session. Parameter sets up the config file name\n");
-        parser.add<std::string>("load", "").set_caption("config.yaml").
+        parser.add<std::string>("load", "").
+               set_caption("config.yaml").
                set_description(
                    "Load session options from YAML config file given as a parameter\n");
-        parser.add<std::string>("output", "").set_caption("output.yaml").
+        parser.add<std::string>("output", "").
+               set_caption("output.yaml").
                set_description(
                    "File name to write YAML-formatted structured output\n");
 #endif        
