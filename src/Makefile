@@ -52,8 +52,10 @@ endif
 ifeq ($(origin CXX),default)
 CXX=mpicxx
 endif
+WITH_CUDA ?= FALSE
 NV_CXX ?= nvcc
 override CPPFLAGS += -I.
+
 
 #override CFLAGS += -O2 -Wall -Wno-long-long
 #override CXXFLAGS += -O2 -Wall -Wextra -pedantic -Wno-long-long -std=c++11
@@ -103,8 +105,14 @@ announce:
 	@if test "$(ANNOUNCE)" -eq "1"; then echo "NOTE: Building target: $(TARGET), binary name: $(BINARY)"; fi
 	@if test "$(ANNOUNCE)" -eq "1"; then echo "NOTE: Use make TARGET=<DIR_NAME> to select a target suite"; fi
 
+ifeq ($(WITH_CUDA),TRUE)
+NVLDFLAGS=$(shell echo $(LDFLAGS) | sed 's/-Wl,/-Xlinker /g')
+$(BINARY): $(IMB_OBJ) $(BECHMARK_SUITE_OBJ) $(ADDITIONAL_OBJ) 
+	$(NV_CXX) -ccbin `which $(CXX)` $(CPPFLAGS) -o $@ $^ $(NVLDFLAGS)
+else
 $(BINARY): $(IMB_OBJ) $(BECHMARK_SUITE_OBJ) $(ADDITIONAL_OBJ) 
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+endif	
 
 %.o: %.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<

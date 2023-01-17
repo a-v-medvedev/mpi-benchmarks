@@ -96,6 +96,7 @@ namespace async_suite {
         parser.add_vector<int>("calctime", "10,10,50,500,10000").
                      set_mode(args_parser::option::APPLY_DEFAULTS_ONLY_WHEN_MISSING).
                      set_caption("INT,INT,...");
+#ifdef WITH_CUDA        
         parser.add<std::string>("gpumode", "off").
                      set_caption("off|explicit|cudaaware");
         parser.add<std::string>("hostallocmode", "stdc").
@@ -109,7 +110,7 @@ namespace async_suite {
 #endif
         parser.add<std::string>("coretogpu", "").
                      set_caption("- core to GPU devices map, like: 0,1,2,3@0;4,5,6,7@1");
-
+#endif        
 
         for (const auto &b : remove_sync_tag(get_instance().names_list)) {
             std::string list_name = std::string(b) + "_params";
@@ -182,6 +183,7 @@ namespace async_suite {
         parser.get<int>("ncycles", ncycles);
         nwarmup = parser.get<int>("nwarmup");
 
+#ifdef WITH_CUDA        
         auto gm = parser.get<std::string>("gpumode");
         if (gm == "off") 
             gpu_mode = gpu_mode_t::OFF;
@@ -194,7 +196,7 @@ namespace async_suite {
                                             " Use -help for help." << std::endl;
             return false;
         }
-//                     set_caption("off|explicit|cudaaware");
+
         auto ham = parser.get<std::string>("hostallocmode");
         if (ham == "stdc") 
             host_alloc_mode = sys::host_alloc_t::HA_STDC;
@@ -208,8 +210,6 @@ namespace async_suite {
             return false;
         }
 
-        //             set_caption("stdc|mpi|cuda");
-//                     set_caption("cuda");
         auto gs = parser.get<std::string>("gpuselect");
         if (gs == "coremap") 
             gpu_selection_mode = gpu_select_t::COREMAP;
@@ -232,7 +232,6 @@ namespace async_suite {
         if (!coretogpu.empty() && gpu_selection_mode != gpu_select_t::COREMAP) {
             throw std::runtime_error("'coretogpu' argument is meaningful only for 'coremap' type of GPU selection.");
         }
-
 #ifdef WITH_HWLOC
         if (gs == gpu_select_t::HWLOC) {
             if (!sys::gpu_conf_init_with_hwloc())
@@ -246,7 +245,7 @@ namespace async_suite {
         if (!sys::gpu_conf_init(coretogpu))
             return false;
 #endif
-
+#endif
         yaml_outfile = parser.get<std::string>("output");
         yaml_out << YAML::BeginDoc;
         yaml_out << YAML::BeginMap;

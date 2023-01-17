@@ -58,6 +58,7 @@ struct gpu_conf {
 };
 
 void gpu_conf::init_generic() {
+#ifdef WITH_CUDA    
     core_to_gpu.clear();
     size_t NC = getnumcores();
     size_t NG = cuda::get_num_of_devices();
@@ -69,6 +70,7 @@ void gpu_conf::init_generic() {
     }
     ncores = NC;
     ngpus = NG;
+#endif    
     return;
 }
 
@@ -154,6 +156,7 @@ void gpu_conf::init_from_str(const std::string &str) {
 
 bool gpu_conf_init(const std::string &str)
 {
+#ifdef WITH_CUDA    
     gpu_conf conf;
     conf.init_from_str(str);
     if (cuda::get_num_of_devices() == 0) {
@@ -169,6 +172,7 @@ bool gpu_conf_init(const std::string &str)
     int gpu = conf.gpu_by_core(getthreadaffinity());
     assert(gpu != -1);
     cuda::set_current_device(gpu);
+#endif    
     return true;
 }
 

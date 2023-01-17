@@ -159,7 +159,9 @@ namespace async_suite {
         if (!is_gpu)
             return;
         if (!is_cuda_aware) {
+#ifdef WITH_CUDA            
             sys::cuda::d2h_transfer((char *)host_sbuf + off, device_sbuf, size);
+#endif            
         }
     }
 
@@ -167,7 +169,9 @@ namespace async_suite {
         if (!is_gpu)
             return;
         if (!is_cuda_aware) {
+#ifdef WITH_CUDA            
             sys::cuda::h2d_transfer((char *)device_rbuf, host_rbuf + off, size);
+#endif            
         }
     }
 
