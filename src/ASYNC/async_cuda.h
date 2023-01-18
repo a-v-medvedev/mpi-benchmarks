@@ -2,8 +2,11 @@
 
 namespace sys {
 namespace cuda {
-void d2h_transfer(char *to, char *from, size_t size);
-void h2d_transfer(char *to, char *from, size_t size);
+
+enum transfer_t { MAIN, WORKLOAD };    
+
+void d2h_transfer(char *to, char *from, size_t size, transfer_t type = transfer_t::MAIN);
+void h2d_transfer(char *to, char *from, size_t size, transfer_t type = transfer_t::MAIN);
 size_t get_num_of_devices();
 void set_current_device(size_t n);
 
@@ -13,5 +16,6 @@ void unregister_mem(char* ptr);
 void device_alloc(char*& ptr, size_t size);
 void host_free(char *ptr);
 void device_free(char *ptr);
+
 }
 }

@@ -25,14 +25,6 @@ static cudaStream_t stream_main = 0, stream_workload = 0;
 static cudaEvent_t event = 0;
 static bool initialized = false;
 
-void d2h_transfer(char*, char*, unsigned long) {
-    assert(0 && "not implemented");
-}
-
-void h2d_transfer(char*, char*, unsigned long) {
-    assert(0 && "not implemented");
-}
-
 void init_contexts()
 {
     CUDA_CALL(cudaStreamCreateWithFlags(&stream_main, cudaStreamNonBlocking))
@@ -58,7 +50,6 @@ void set_current_device(unsigned long n) {
     CUDA_CALL(cudaSetDevice(n));
     init_contexts();
     initialized = true;
-    assert(0 && "not implemented");
 }
 
 void set_current(const std::string &pci_id)
@@ -139,6 +130,23 @@ void device_free(char *ptr) {
     }
 }
 
+void d2h_transfer(char *to, char *from, size_t size, transfer_t type)
+{
+    CUDA_CALL(cudaMemcpyAsync(to, from, size, cudaMemcpyDeviceToHost,
+                              type == transfer_t::MAIN ? stream_main : stream_workload));
+    if (type == transfer_t::MAIN) {
+        CUDA_CALL(cudaStreamSynchronize(stream_main))
+    }
+}
+
+void h2d_transfer(char *to, char *from, size_t size, transfer_t type)
+{
+    CUDA_CALL(cudaMemcpyAsync(to, from, size, cudaMemcpyHostToDevice,
+                              type == transfer_t::MAIN ? stream_main : stream_workload));
+    if (type == transfer_t::MAIN) {
+        CUDA_CALL(cudaStreamSynchronize(stream_main))
+    }
+}
 
 
 }

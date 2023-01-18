@@ -90,7 +90,7 @@ static inline int getthreadaffinity() {
     if (core == -1) {
         throw std::runtime_error("getthreadaffinity: logic error: cannot find an assigned core");
     }
-    if (core < (int)getnumcores()) {
+    if (core >= (int)getnumcores()) {
         throw std::runtime_error("getthreadaffinity: logic error: wrong id of assigned core");
     }
     return core;

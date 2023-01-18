@@ -281,10 +281,12 @@ namespace async_suite {
             for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
                 int rank = comm_actions[commstage].rank;
                 if (comm_actions[commstage].action == action_t::SEND) {
+                    update_sbuf((i%n)*b, b);
                     MPI_Send(get_sbuf() + (i%n)*b, count, datatype, rank, tag, MPI_COMM_WORLD);
                 } else if (comm_actions[commstage].action == action_t::RECV) {
                     MPI_Recv(get_rbuf() + (i%n)*b, count, datatype, rank, MPI_ANY_TAG, 
                              MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    update_rbuf((i%n)*b, b);
                 }
             }
         }
@@ -320,6 +322,7 @@ namespace async_suite {
                 int rank = comm_actions[commstage].rank;
                 if (i == nwarmup) t1 = MPI_Wtime();
                 if (comm_actions[commstage].action == action_t::SEND) {
+                    update_sbuf((i%n)*b, b);
                     MPI_Isend(get_sbuf()  + (i%n)*b, count, datatype, rank, tag, MPI_COMM_WORLD, 
                               &requests[nr++]);
                 } else if (comm_actions[commstage].action == action_t::RECV) {
@@ -334,6 +337,11 @@ namespace async_suite {
                 total_tover_calc += local_tover_calc;
             }
             MPI_Waitall(calc.num_requests, requests, MPI_STATUSES_IGNORE);
+            for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
+                if (comm_actions[commstage].action == action_t::RECV) {
+                    update_rbuf((i%n)*b, b);
+                }
+            }
         }
         t2 = MPI_Wtime();
         time = (t2 - t1) / ncycles;
@@ -380,7 +388,9 @@ namespace async_suite {
         double t1 = 0, t2 = 0;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
+            update_sbuf((i%n)*b, b);
             MPI_Allreduce(get_sbuf() + (i%n)*b, get_rbuf() + (i%n)*b, count, datatype, MPI_SUM, MPI_COMM_WORLD);
+            update_rbuf((i%n)*b, b);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -417,9 +427,11 @@ namespace async_suite {
 	    MPI_Status  status;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
+            update_sbuf((i%n)*b, b);
             MPI_Iallreduce(get_sbuf() + (i%n)*b, get_rbuf() + (i%n)*b, count, datatype, MPI_SUM, MPI_COMM_WORLD, request);
             calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_tover_calc);
             MPI_Wait(request, &status);
+            update_rbuf((i%n)*b, b);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -458,9 +470,11 @@ namespace async_suite {
         double t1 = 0, t2 = 0;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
+            update_sbuf((i%n)*b, b);
             MPI_Neighbor_alltoall(get_sbuf() + (i%n)*b, count, datatype,
                                   get_rbuf() + (i%n)*b, count, datatype,
                                   graph_comm);            
+            update_rbuf((i%n)*b, b);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -496,11 +510,13 @@ namespace async_suite {
 	    MPI_Status  status;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
+            update_sbuf((i%n)*b, b);
             MPI_Ineighbor_alltoall(get_sbuf() + (i%n)*b, count, datatype,
                                    get_rbuf() + (i%n)*b, count, datatype,
                                    graph_comm, request);
             calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_tover_calc);
             MPI_Wait(request, &status);
+            update_rbuf((i%n)*b, b);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -541,6 +557,7 @@ namespace async_suite {
             if (i == nwarmup) t1 = MPI_Wtime();
             for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
                 int rank = comm_actions[commstage].rank;
+                update_sbuf((i%n)*b, b);
                 MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
                 if (comm_actions[commstage].action == action_t::RECV) {
                     MPI_Get(get_rbuf() + (i%n)*b, count, datatype, rank, (i%n)*b/dtsize, count, datatype, win);
@@ -548,6 +565,7 @@ namespace async_suite {
                     MPI_Put(get_sbuf() + (i%n)*b, count, datatype, rank, (i%n)*b/dtsize, count, datatype, win);
                 }
                 MPI_Win_unlock(rank, win);
+                update_rbuf((i%n)*b, b);
             }
         }
         t2 = MPI_Wtime();
@@ -586,6 +604,7 @@ namespace async_suite {
                 int r = comm_actions[commstage].rank;
                 assert(lock_ranks.find(r) != lock_ranks.end());
                 if (!lock_ranks[r]) {
+                    update_sbuf((i%n)*b, b);
                     MPI_Win_lock(MPI_LOCK_SHARED, r, 0, win);
                     lock_ranks[r] = true;
                 }
@@ -603,6 +622,7 @@ namespace async_suite {
                 if (lock_ranks[r]) {
                     lock_ranks[r] = false;
                     MPI_Win_unlock(r, win);
+                    update_rbuf((i%n)*b, b);
                 }
             }
             if (i >= nwarmup) {
