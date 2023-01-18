@@ -130,7 +130,7 @@ namespace async_suite {
 	params::dictionary<params::benchmarks_params> p;
     std::string coretogpu;
     gpu_mode_t gpu_mode;
-    sys::host_alloc_t host_alloc_mode; 
+    sys::host_alloc_t host_alloc_mode = sys::host_alloc_t::HA_STDC; 
     gpu_select_t gpu_selection_mode; 
 
     template <> bool BenchmarkSuite<BS_GENERIC>::prepare(const args_parser &parser,
