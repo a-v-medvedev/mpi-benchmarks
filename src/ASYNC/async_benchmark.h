@@ -70,6 +70,8 @@ namespace async_suite {
         virtual void finalize() override;
         virtual size_t buf_size_multiplier() { return 1; }
 
+        void setup_the_gpu_rank();
+
         char *get_sbuf();
         char *get_rbuf();
         void update_sbuf(size_t off, size_t size);
@@ -90,6 +92,7 @@ namespace async_suite {
         bool is_cpu_calculations = false;
         bool is_gpu_calculations = false;
         int irregularity_level = 0;
+        int cuda_workload_calibration = 0;
         std::map<int, int> calctime_by_len;
         int cycles_per_10usec_avg = 0, cycles_per_10usec_min = 0, cycles_per_10usec_max = 0;
         float a[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], b[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], 

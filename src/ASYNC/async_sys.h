@@ -97,6 +97,7 @@ static inline int getthreadaffinity() {
 }
 
 bool gpu_conf_init(const std::string &str);
+bool is_it_the_rank_for_gpu_calc();
 
 }
 

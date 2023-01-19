@@ -781,12 +781,20 @@ namespace async_suite {
             is_gpu_calculations = false;
             is_manual_progress = false;
         }
+        if (is_gpu_calculations) {
+            is_gpu_calculations = sys::is_it_the_rank_for_gpu_calc();
+        }
         for (size_t i = 0; i < CALC_MATRIX_SIZE; i++) {
             x[i] = y[i] = 0.;
             for (size_t j=0; j < CALC_MATRIX_SIZE; j++) {
                 a[i][j] = 1.;
             }
         }
+#ifdef WITH_CUDA       
+        if (is_gpu_calculations) {
+            sys::cuda::workload_calibration(); 
+        }
+#endif        
     }
 
     bool AsyncBenchmark_calc::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
@@ -808,7 +816,7 @@ namespace async_suite {
         if (cycles_per_10usec == 0) {
             cycles_per_10usec = cycles_per_10usec_avg;
             if (cycles_per_10usec_avg == 0) {
-                throw std::runtime_error("AsyncBenchmark_calc: failure in cycles_per_10usec_avg estimation"); (cycles_per_10usec_avg != 0);
+                throw std::runtime_error("AsyncBenchmark_calc: failure in cycles_per_10usec_avg estimation"); //(cycles_per_10usec_avg != 0);
             }
         }
         int ncalccycles = calctime_by_len[count] * cycles_per_10usec / 10;

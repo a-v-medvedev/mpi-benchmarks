@@ -37,42 +37,11 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <mpi.h>
 #include <assert.h>
 #include "async_sys.h"
 
 namespace sys {
-
-struct gpu_conf {
-    int ncores = 0, ngpus = 0;
-    std::map<int, int> core_to_gpu;
-    std::vector<int> cores;
-    mutable int core = -1;
-    int nthreads = 0;
-    void init_generic(); // gets ncores and ngpus from system
-    void init_from_str(const std::string &str);
-    int gpu_by_core(int core) const {
-        auto gpuit = core_to_gpu.find(core);
-        assert(gpuit != core_to_gpu.end());
-        return gpuit->second;
-    }
-};
-
-void gpu_conf::init_generic() {
-#ifdef WITH_CUDA    
-    core_to_gpu.clear();
-    size_t NC = getnumcores();
-    size_t NG = cuda::get_num_of_devices();
-    for (size_t i = 0; i < NC; i++) {
-        int G = -1;
-        if (NG)
-            G = i * NG / NC;
-        core_to_gpu[i] = G;
-    }
-    ncores = NC;
-    ngpus = NG;
-#endif    
-    return;
-}
 
 static inline std::vector<std::string> str_split(const std::string &s, char delimiter)
 {
@@ -93,6 +62,42 @@ static inline void vstr_to_vint(std::vector<std::string>& from,
         to.push_back(x);
     }
 }
+
+struct gpu_conf {
+    int ncores = 0, ngpus = 0;
+    std::map<int, int> core_to_gpu;
+    std::vector<int> cores;
+    mutable int core = -1;
+    int per_gpu_rank = -1;
+    int nthreads = 0;
+    void init_generic(); // gets ncores and ngpus from system
+    void init_from_str(const std::string &str);
+    int gpu_by_core(int core) const {
+        auto gpuit = core_to_gpu.find(core);
+        assert(gpuit != core_to_gpu.end());
+        return gpuit->second;
+    }
+};
+
+static gpu_conf conf;
+
+void gpu_conf::init_generic() {
+#ifdef WITH_CUDA    
+    core_to_gpu.clear();
+    size_t NC = getnumcores();
+    size_t NG = cuda::get_num_of_devices();
+    for (size_t i = 0; i < NC; i++) {
+        int G = -1;
+        if (NG)
+            G = i * NG / NC;
+        core_to_gpu[i] = G;
+    }
+    ncores = NC;
+    ngpus = NG;
+#endif    
+    return;
+}
+
 
 void gpu_conf::init_from_str(const std::string &str) {
     if (str.empty()) {
@@ -154,10 +159,23 @@ void gpu_conf::init_from_str(const std::string &str) {
     }
 }
 
+void find_the_only_rank_for_gpu()
+{
+    MPI_Comm per_node_comm, per_gpu_comm;
+    int per_node_rank, per_gpu_rank, rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, rank, MPI_INFO_NULL, &per_node_comm);
+    MPI_Comm_rank(per_node_comm, &per_node_rank);
+    int device_hash = sys::cuda::get_current_device_hash();
+    MPI_Comm_split(per_node_comm, device_hash, per_node_rank, &per_gpu_comm);
+    MPI_Comm_rank(per_gpu_comm, &per_gpu_rank);
+    conf.per_gpu_rank = per_gpu_rank;
+    //std::cout << ">> CUDA: rank=" << rank << " device_hash=" << device_hash << " find_the_only_rank_for_gpu=" << conf.per_gpu_rank << std::endl;
+}
+
 bool gpu_conf_init(const std::string &str)
 {
 #ifdef WITH_CUDA    
-    gpu_conf conf;
     conf.init_from_str(str);
     if (cuda::get_num_of_devices() == 0) {
         std::cout << "FATAL: no GPU devices found" << std::endl;
@@ -172,11 +190,20 @@ bool gpu_conf_init(const std::string &str)
     int gpu = conf.gpu_by_core(getthreadaffinity());
     assert(gpu != -1);
     cuda::set_current_device(gpu);
+    find_the_only_rank_for_gpu();
 #endif    
     return true;
 }
 
-
+bool is_it_the_rank_for_gpu_calc()
+{
+#ifdef WITH_CUDA    
+    return conf.per_gpu_rank == 0;
+#else
+    return false;
+#endif    
 }
+
+} // sys
 
 
