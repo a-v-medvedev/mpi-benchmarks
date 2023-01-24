@@ -105,7 +105,7 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
             {"stride",              {value::I, NONCHANGEABLE, ONLYBENCHS,   NOMINMAX,   ALLALLOWED}},
             {"nneighb",             {value::I, NONCHANGEABLE, ONLYBENCHS,   NOMINMAX,   ALLALLOWED}},
             {"ndim",                {value::I, NONCHANGEABLE, ONLYBENCHS,   {"1", "4"}, ALLALLOWED}},
-            {"calculations",        {value::B, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
+            {"cpu_calculations",    {value::B, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
             {"gpu_calculations",    {value::B, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
             {"manual_progress",     {value::B, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
             {"spin_period",         {value::I, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
@@ -130,16 +130,16 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
             list.set_value_if_missing<std::string>("topology", "ping-pong");
         }
         if (list_name == "workload") {
-            list.set_value_if_missing<bool>("calculations", false);
-            if (list.get_bool("calculations")) {
-                list.set_value_if_missing<bool>("manual_progress", false);
+            list.set_value_if_missing<bool>("cpu_calculations", false);
+            list.set_value_if_missing<bool>("gpu_calculations", false);
+            list.set_value_if_missing<bool>("manual_progress", false);
+            if (list.get_bool("cpu_calculations")) {
                 if (list.get_bool("manual_progress")) {
                     list.set_value_if_missing<uint32_t>("spin_period", 50);
                 }
                 list.set_value_if_missing<uint32_t>("cycles_per_10usec", 0);
-                list.set_value_if_missing<bool>("gpu_calculations", false);
                 if (list.get_int("cycles_per_10usec") == 0) {
-					throw std::runtime_error("params: for 'calculations' workload: calibration parameter"
+					throw std::runtime_error("params: for 'cpu_calculations' workload: calibration parameter"
                                              " 'cycles_per_10usec' is obligatory. Run calc_calibration first!");
                 }
             }

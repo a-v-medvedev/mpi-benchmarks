@@ -99,20 +99,23 @@ namespace async_suite {
         size_t gpu_workload_transfer_size = 1024;
         bool gpu_calc_cycle_active = false;
         bool gpu_calc_cycle_finish = false;
+        std::thread *p_tgpucalc = nullptr;
         
         std::map<int, int> calctime_by_len;
+        int cycles_per_10usec = 0; 
         int cycles_per_10usec_avg = 0, cycles_per_10usec_min = 0, cycles_per_10usec_max = 0;
         int irregularity_level = 0;
         float a[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], b[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], 
               c[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], x[CALC_MATRIX_SIZE], y[CALC_MATRIX_SIZE];
-        void calc_and_progress_cycle(int ncycles, int iters_till_test, double &tover_comm);
-        void calc_cycle(int ncycles, double &tover_comm);
-        void gpu_calc_cycle();
+        void calc_and_progress_loop(int ncycles, int iters_till_test, double &tover_comm);
+        void calc_loop(int ncycles, double &tover_comm);
+        void gpu_calc_loop();
         public:
         void calibration();
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         virtual bool is_default() override { return false; }
+        virtual void finalize() override;
         DEFINE_INHERITED(AsyncBenchmark_calc, BenchmarkSuite<BS_GENERIC>);
     };
 

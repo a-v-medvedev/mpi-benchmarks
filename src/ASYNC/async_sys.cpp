@@ -193,6 +193,8 @@ bool gpu_conf_init(const std::string &str)
     assert(gpu != -1);
     cuda::set_current_device(gpu);
     find_the_only_rank_for_gpu();
+#else
+    (void)str;    
 #endif    
     return true;
 }

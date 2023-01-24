@@ -46,6 +46,32 @@
 #include "async_cuda.h"
 
 namespace async_suite {
+
+#ifndef ASYNC_EXTRA_BARRIER
+#define ASYNC_EXTRA_BARRIER 0
+#endif
+
+    static void barrier(int rank, int np) {
+#if !ASYNC_EXTRA_BARRIER
+        (void)rank;
+        (void)np;
+        MPI_Barrier(MPI_COMM_WORLD);
+#else
+
+        int mask = 0x1;
+        int dst, src;
+        int tmp = 0;
+        for (; mask < np; mask <<= 1) {
+            dst = (rank + mask) % np;
+            src = (rank - mask + np) % np;
+            MPI_Sendrecv(&tmp, 0, MPI_BYTE, dst, 1010,
+                         &tmp, 0, MPI_BYTE, src, 1010,
+                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+#endif
+    }
+
+
     void AsyncBenchmark::init() {
         GET_PARAMETER(std::vector<int>, len);
         GET_PARAMETER(MPI_Datatype, datatype);
@@ -361,30 +387,6 @@ namespace async_suite {
         return true;
     }
 
-#ifndef ASYNC_EXTRA_BARRIER
-#define ASYNC_EXTRA_BARRIER 0
-#endif
-
-    void barrier(int rank, int np) {
-#if !ASYNC_EXTRA_BARRIER
-        (void)rank;
-        (void)np;
-        MPI_Barrier(MPI_COMM_WORLD);
-#else
-
-        int mask = 0x1;
-        int dst, src;
-        int tmp = 0;
-        for (; mask < np; mask <<= 1) {
-            dst = (rank + mask) % np;
-            src = (rank - mask + np) % np;
-            MPI_Sendrecv(&tmp, 0, MPI_BYTE, dst, 1010,
-                         &tmp, 0, MPI_BYTE, src, 1010,
-                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        }
-#endif
-    }
-
     bool AsyncBenchmark_allreduce::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
                                              double &time, double &tover_comm, double &tover_calc) {
         time = 0;
@@ -649,7 +651,7 @@ namespace async_suite {
         return true;
     }
 
-    void AsyncBenchmark_calc::gpu_calc_cycle() {
+    void AsyncBenchmark_calc::gpu_calc_loop() {
 #ifdef WITH_CUDA                
 		if (!is_gpu_calculations)
 			return;
@@ -671,52 +673,43 @@ namespace async_suite {
 
     // NOTE: to ensure just calc, no manual progress call it with iters_till_test == R
     // NOTE2: tover_comm is not zero'ed here before operation!
-    void AsyncBenchmark_calc::calc_and_progress_cycle(int ncalccycles, int iters_till_test, double &tover_comm) {
-#ifdef WITH_CUDA
+    void AsyncBenchmark_calc::calc_and_progress_loop(int ncalccycles, int iters_till_test, double &tover_comm) {
 		gpu_calc_cycle_active = true;
-		gpu_calc_cycle_finish = false;
-		std::thread tgpucalc ([&]() {
-			gpu_calc_cycle();
-		});
-#endif
-        for (int repeat = 0, cnt = iters_till_test; repeat < ncalccycles; repeat++) {
-            if (--cnt == 0) { 
-                double t1 = MPI_Wtime();
-                if (reqs && num_requests) {
-                    for (int r = 0; r < num_requests; r++) {
-                        if (!stat[r]) {
-                            total_tests++;
-                            MPI_Test(&reqs[r], &stat[r], MPI_STATUS_IGNORE);
-                            if (stat[r]) {
-                                successful_tests++;
+        if (is_cpu_calculations) {
+            for (int repeat = 0, cnt = iters_till_test; repeat < ncalccycles; repeat++) {
+                if (--cnt == 0) { 
+                    double t1 = MPI_Wtime();
+                    if (reqs && num_requests) {
+                        for (int r = 0; r < num_requests; r++) {
+                            if (!stat[r]) {
+                                total_tests++;
+                                MPI_Test(&reqs[r], &stat[r], MPI_STATUS_IGNORE);
+                                if (stat[r]) {
+                                    successful_tests++;
+                                }
                             }
                         }
                     }
-                }
-                double t2 = MPI_Wtime();
-                tover_comm += (t2 - t1);
-                cnt = iters_till_test;
-            } 
-            for (size_t i = 0; i < CALC_MATRIX_SIZE; i++) {
-                for (size_t j = 0; j < CALC_MATRIX_SIZE; j++) {
-                    for (size_t k = 0; k < CALC_MATRIX_SIZE; k++) {
-                        c[i][j] += a[i][k] * b[k][j] + repeat*repeat;
+                    double t2 = MPI_Wtime();
+                    tover_comm += (t2 - t1);
+                    cnt = iters_till_test;
+                } 
+                for (size_t i = 0; i < CALC_MATRIX_SIZE; i++) {
+                    for (size_t j = 0; j < CALC_MATRIX_SIZE; j++) {
+                        for (size_t k = 0; k < CALC_MATRIX_SIZE; k++) {
+                            c[i][j] += a[i][k] * b[k][j] + repeat*repeat;
+                        }
                     }
                 }
             }
-
+        } else {
+            usleep(ncalccycles * 10 / cycles_per_10usec);
         }
-#ifdef WITH_CUDA
 		gpu_calc_cycle_active = false;
-		gpu_calc_cycle_finish = true;
-		tgpucalc.join();
-		sys::cuda::sync_contexts();
-		gpu_calc_cycle_finish = false;
-#endif
     }
 
-    void AsyncBenchmark_calc::calc_cycle(int ncalccycles, double &tover_comm) {
-        calc_and_progress_cycle(ncalccycles, ncalccycles, tover_comm);
+    void AsyncBenchmark_calc::calc_loop(int ncalccycles, double &tover_comm) {
+        calc_and_progress_loop(ncalccycles, ncalccycles, tover_comm);
     }
 
     void AsyncBenchmark_calc::calibration() {
@@ -730,7 +723,7 @@ namespace async_suite {
 		for (int k = 0; k < 3 + estcycles; k++) {
 			double tover = 0;
 			double t1 = MPI_Wtime();
-			calc_cycle(Nrep, tover);
+			calc_loop(Nrep, tover);
 			double t2 = MPI_Wtime();
 			if (k >= estcycles)
 				timings[k - estcycles] = t2 - t1;
@@ -806,19 +799,25 @@ namespace async_suite {
         GET_PARAMETER(std::vector<int>, calctime);
 		GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
         if (p.find("workload")) {
-            is_cpu_calculations = p.get("workload").get_bool("calculations");
+            is_cpu_calculations = p.get("workload").get_bool("cpu_calculations");
+            is_gpu_calculations = p.get("workload").get_bool("gpu_calculations");
+            if (is_gpu_calculations && !is_gpu) {
+                throw std::runtime_error("GPU workload for calculations requires GPU mode.");
+            }
             if (is_cpu_calculations) {
                 is_manual_progress = p.get("workload").get_bool("manual_progress");
-                is_gpu_calculations = p.get("workload").get_bool("gpu_calculations");
+                cycles_per_10usec = p.get("workload").get_int("cycles_per_10usec");
             } else {
+                if (p.get("workload").get_bool("manual_progress")) {
+                    throw std::runtime_error("Manual progress works only when CPU calculations are switched on.");
+                }
                 is_manual_progress = false;
-                is_gpu_calculations = false;
             }
             for (size_t i = 0; i < len.size(); i++) {
                 calctime_by_len[len[i]] = (i >= calctime.size() ? (calctime.size() == 0 ? 10000 : calctime[calctime.size() - 1]) : calctime[i]);
             }            
         } else {
-            is_cpu_calculations = true;
+            is_cpu_calculations = false;
             is_gpu_calculations = false;
             is_manual_progress = false;
         }
@@ -842,8 +841,26 @@ namespace async_suite {
 			if (device_transfer_buf == nullptr) {
 				throw std::runtime_error("AsyncBenchmark: memory allocation error.");
 			}
+            gpu_calc_cycle_active = false;
+            gpu_calc_cycle_finish = false;
+            p_tgpucalc = new std::thread([&]() {
+                gpu_calc_loop();
+            });
 		}
 #endif        
+    }
+
+    void AsyncBenchmark_calc::finalize() {
+#ifdef WITH_CUDA
+        if (p_tgpucalc != nullptr) {
+            gpu_calc_cycle_active = false;
+            gpu_calc_cycle_finish = true;
+            p_tgpucalc->join();
+            sys::cuda::sync_contexts();
+            gpu_calc_cycle_finish = false;
+        }
+#endif
+        AsyncBenchmark::finalize();
     }
 
     bool AsyncBenchmark_calc::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
@@ -860,13 +877,13 @@ namespace async_suite {
             time = 0;
             return true;
         }
-        int cycles_per_10usec = p.get("workload").get_int("cycles_per_10usec");
         double t1 = 0, t2 = 0;
+        
         if (cycles_per_10usec == 0) {
-            cycles_per_10usec = cycles_per_10usec_avg;
-            if (cycles_per_10usec_avg == 0) {
-                throw std::runtime_error("AsyncBenchmark_calc: failure in cycles_per_10usec_avg estimation"); //(cycles_per_10usec_avg != 0);
+            if (is_cpu_calculations) {
+                throw std::runtime_error("Wrong cycles_per_10usec constant value.");
             }
+            cycles_per_10usec = 10;
         }
         int ncalccycles = calctime_by_len[count] * cycles_per_10usec / 10;
         if (is_manual_progress && reqs) {
@@ -880,28 +897,35 @@ namespace async_suite {
             for (int i = 0; i < ncycles + nwarmup; i++) {
                 if (i == nwarmup) 
                     t1 = MPI_Wtime();
-                calc_and_progress_cycle(ncalccycles, cnt_for_mpi_test, tover_comm);
+                calc_and_progress_loop(ncalccycles, cnt_for_mpi_test, tover_comm);
             }
         } else {
             for (int i = 0; i < ncycles + nwarmup; i++) {
                 if (i == nwarmup) 
                     t1 = MPI_Wtime();
-                calc_cycle(ncalccycles, tover_comm);
+                calc_loop(ncalccycles, tover_comm);
             }
         }
         t2 = MPI_Wtime();
         time = (t2 - t1);
-        int pure_calc_time_in_usec = int((time - tover_comm) * 1e6);
-        constexpr double _10usec = 1e-5;
-        constexpr double _1usec = 1e-6;
-        if (!pure_calc_time_in_usec)
-            return true;
-        real_cycles_per_10usec = ncalccycles * 10 / pure_calc_time_in_usec;
-        if (cycles_per_10usec && real_cycles_per_10usec) {
-            int ncalccycles_expected = pure_calc_time_in_usec * cycles_per_10usec / 10;
-            tover_calc = (double)(ncalccycles_expected - ncalccycles) / (double)real_cycles_per_10usec * _10usec; 
-            if (tover_calc < _1usec)
-                tover_calc = 0;
+        if (is_cpu_calculations) {
+            int pure_calc_time_in_usec = int((time - tover_comm) * 1e6);
+            constexpr double _10usec = 1e-5;
+            constexpr double _1usec = 1e-6;
+            if (!pure_calc_time_in_usec)
+                return true;
+            std::cout << ">> pure_calc_time_in_usec: " << pure_calc_time_in_usec << std::endl;
+            real_cycles_per_10usec = ncalccycles * 10 / pure_calc_time_in_usec;
+            std::cout << ">> real_cycles_per_10usec: " << real_cycles_per_10usec << std::endl;
+            std::cout << ">> ncalccycles: " << ncalccycles << std::endl;
+            if (cycles_per_10usec && real_cycles_per_10usec) {
+                int ncalccycles_expected = pure_calc_time_in_usec * cycles_per_10usec / 10;
+                tover_calc = (double)(ncalccycles_expected - ncalccycles) / (double)real_cycles_per_10usec * _10usec; 
+                if (tover_calc < _1usec)
+                    tover_calc = 0;
+            }
+        } else {
+            tover_calc = 0;
         }
         return true;
     }
