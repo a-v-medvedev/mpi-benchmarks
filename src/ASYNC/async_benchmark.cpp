@@ -37,6 +37,7 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <thread>
 #include "async_benchmark.h"
 #include "async_sys.h"
 #include "async_average.h"
@@ -161,6 +162,9 @@ namespace async_suite {
         if (!is_cuda_aware) {
 #ifdef WITH_CUDA            
             sys::cuda::d2h_transfer((char *)host_sbuf + off, device_sbuf, size);
+#else
+            (void)off;
+            (void)size;            
 #endif            
         }
     }
@@ -171,6 +175,9 @@ namespace async_suite {
         if (!is_cuda_aware) {
 #ifdef WITH_CUDA            
             sys::cuda::h2d_transfer((char *)device_rbuf, host_rbuf + off, size);
+#else
+            (void)off;
+            (void)size;            
 #endif            
         }
     }
@@ -642,9 +649,36 @@ namespace async_suite {
         return true;
     }
 
+    void AsyncBenchmark_calc::gpu_calc_cycle() {
+#ifdef WITH_CUDA                
+		if (!is_gpu_calculations)
+			return;
+        while (true) {
+            if (gpu_calc_cycle_active && sys::cuda::is_device_idle()) {
+                for (int i = 0; i < 5; i++) {
+                    sys::cuda::submit_workload(gpu_workload_ncycles, gpu_workload_calibration);
+                    sys::cuda::d2h_transfer(host_transfer_buf, device_transfer_buf, gpu_workload_transfer_size,
+                                            sys::cuda::transfer_t::WORKLOAD);
+                }
+            } else {
+				if (gpu_calc_cycle_finish)
+					return;
+                usleep(100);
+            }
+        }
+#endif        
+    }
+
     // NOTE: to ensure just calc, no manual progress call it with iters_till_test == R
     // NOTE2: tover_comm is not zero'ed here before operation!
     void AsyncBenchmark_calc::calc_and_progress_cycle(int ncalccycles, int iters_till_test, double &tover_comm) {
+#ifdef WITH_CUDA
+		gpu_calc_cycle_active = true;
+		gpu_calc_cycle_finish = false;
+		std::thread tgpucalc ([&]() {
+			gpu_calc_cycle();
+		});
+#endif
         for (int repeat = 0, cnt = iters_till_test; repeat < ncalccycles; repeat++) {
             if (--cnt == 0) { 
                 double t1 = MPI_Wtime();
@@ -672,6 +706,13 @@ namespace async_suite {
             }
 
         }
+#ifdef WITH_CUDA
+		gpu_calc_cycle_active = false;
+		gpu_calc_cycle_finish = true;
+		tgpucalc.join();
+		sys::cuda::sync_contexts();
+		gpu_calc_cycle_finish = false;
+#endif
     }
 
     void AsyncBenchmark_calc::calc_cycle(int ncalccycles, double &tover_comm) {
@@ -792,8 +833,16 @@ namespace async_suite {
         }
 #ifdef WITH_CUDA       
         if (is_gpu_calculations) {
-            sys::cuda::workload_calibration(); 
-        }
+            gpu_workload_calibration = sys::cuda::workload_calibration(); 
+			sys::host_mem_alloc(host_transfer_buf, gpu_workload_transfer_size, host_alloc_mode);
+			if (host_transfer_buf == nullptr) {
+				throw std::runtime_error("AsyncBenchmark: memory allocation error.");
+			}
+			sys::device_mem_alloc(device_transfer_buf, gpu_workload_transfer_size, sys::device_alloc_t::DA_CUDA);
+			if (device_transfer_buf == nullptr) {
+				throw std::runtime_error("AsyncBenchmark: memory allocation error.");
+			}
+		}
 #endif        
     }
 

@@ -23,9 +23,9 @@ void device_free(char *ptr);
 void init_contexts();
 void sync_contexts();
 
-bool is_idle();
+bool is_device_idle();
 void submit_workload(int ncycles, int calibration_const);
-void workload_calibration();
+int workload_calibration();
 
 }
 }

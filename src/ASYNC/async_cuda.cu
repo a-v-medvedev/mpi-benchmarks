@@ -83,7 +83,7 @@ int get_current_device_hash() {
     return hash;
 }
 
-bool is_idle()
+bool is_device_idle()
 {
     if (event) {
         CUDA_CALL(cudaEventRecord(event, stream_workload));
@@ -122,12 +122,12 @@ void submit_workload(int ncycles, int calibration_const)
     workload<array_dim><<<1, 1, 0, stream_workload>>>(ncycles, calibration_const);
 }
 
-void workload_calibration() {
+int workload_calibration() {
     // Workload execution time calibration procedure. Trying to tune number of cycles
     // so that workload execution+sync time is about 100 usec
     static int cuda_workload_calibration = -1;
     if (cuda_workload_calibration != -1)
-        return;
+        return cuda_workload_calibration;
     cuda_workload_calibration = 1;
     const int workload_tune_maxiter = 23;
     const long target_exec_time_in_usecs = 200L;
@@ -163,6 +163,7 @@ void workload_calibration() {
     if (cuda_workload_calibration < 2 || cuda_workload_calibration > 1000) {
         throw std::runtime_error("cuda workload calibration failed");
     }
+    return cuda_workload_calibration;
     //std::cout << ">> CUDA: cuda_workload_calibration = " << cuda_workload_calibration << std::endl;
 }
 

@@ -161,6 +161,7 @@ void gpu_conf::init_from_str(const std::string &str) {
 
 void find_the_only_rank_for_gpu()
 {
+#ifdef WITH_CUDA    
     MPI_Comm per_node_comm, per_gpu_comm;
     int per_node_rank, per_gpu_rank, rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -171,6 +172,7 @@ void find_the_only_rank_for_gpu()
     MPI_Comm_rank(per_gpu_comm, &per_gpu_rank);
     conf.per_gpu_rank = per_gpu_rank;
     //std::cout << ">> CUDA: rank=" << rank << " device_hash=" << device_hash << " find_the_only_rank_for_gpu=" << conf.per_gpu_rank << std::endl;
+#endif
 }
 
 bool gpu_conf_init(const std::string &str)
