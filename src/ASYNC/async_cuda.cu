@@ -118,7 +118,7 @@ __global__ void workload(int ncycles, int CALIBRATION_CONST) {
 
 void submit_workload(int ncycles, int calibration_const)
 {
-    constexpr int array_dim = 8;
+    constexpr int array_dim = 3;
     workload<array_dim><<<1, 1, 0, stream_workload>>>(ncycles, calibration_const);
 }
 
@@ -139,9 +139,9 @@ int workload_calibration() {
         long execution_time_in_usecs = (long)t.stop();
         // Skip 13 first time estimations: they often include some GPU API
         // initialization time
-        if (i < 13)
+        std::cout << ">> CUDA: execution_time_in_usecs=" << execution_time_in_usecs << " cuda_workload_calibration=" << cuda_workload_calibration << std::endl;      if (i < 13)
             continue;
-        //std::cout << ">> CUDA: execution_time_in_usecs=" << execution_time_in_usecs << " cuda_workload_calibration=" << cuda_workload_calibration << std::endl;
+
         if (execution_time_in_usecs == 0)
             break;
         if (execution_time_in_usecs < good_enough_calibration) {
@@ -161,6 +161,7 @@ int workload_calibration() {
         }
     }
     if (cuda_workload_calibration < 2 || cuda_workload_calibration > 1000) {
+        std::cout << ">> cuda_workload_calibration=" << cuda_workload_calibration << std::endl;
         throw std::runtime_error("cuda workload calibration failed");
     }
     return cuda_workload_calibration;
