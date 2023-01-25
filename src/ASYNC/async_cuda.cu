@@ -118,7 +118,7 @@ __global__ void workload(int ncycles, int CALIBRATION_CONST) {
 
 void submit_workload(int ncycles, int calibration_const)
 {
-    constexpr int array_dim = 3;
+    constexpr int array_dim = 8;
     workload<array_dim><<<1, 1, 0, stream_workload>>>(ncycles, calibration_const);
 }
 
