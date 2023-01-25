@@ -91,6 +91,7 @@ namespace async_suite {
         bool is_manual_progress = false;
         bool is_cpu_calculations = false;
         bool is_gpu_calculations = false;
+        bool is_omit_calculation_loop = false;
 
         int gpu_workload_calibration = 0;
         char *host_transfer_buf = nullptr; 
@@ -109,6 +110,7 @@ namespace async_suite {
               c[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], x[CALC_MATRIX_SIZE], y[CALC_MATRIX_SIZE];
         void calc_and_progress_loop(int ncycles, int iters_till_test, double &tover_comm);
         void calc_loop(int ncycles, double &tover_comm);
+        void calc_loop(int ncalccycles);
         void gpu_calc_loop();
         public:
         void calibration();

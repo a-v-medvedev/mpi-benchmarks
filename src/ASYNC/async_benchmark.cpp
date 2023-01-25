@@ -111,6 +111,7 @@ namespace async_suite {
     void AsyncBenchmark_ipt2pt::init() {
         GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
         AsyncBenchmark::init();
+        calc.init();
         topo = topohelper::create(p.get("pt2pt"), np, rank);
     }
 
@@ -384,6 +385,7 @@ namespace async_suite {
         MPI_Barrier(MPI_COMM_WORLD);
         free(requests);
         results[count] = result { true, time, time - ctime + tover_comm, tover_calc, ncycles };
+        std::cout << ">> ipt2pt::benchmark: rank=" << rank << " time: " << time << " ctime: " << ctime << " tover_comm: " << tover_comm << " tover_calc: " << tover_calc << std::endl;
         return true;
     }
 
@@ -659,8 +661,10 @@ namespace async_suite {
             if (gpu_calc_cycle_active && sys::cuda::is_device_idle()) {
                 for (int i = 0; i < 5; i++) {
                     sys::cuda::submit_workload(gpu_workload_ncycles, gpu_workload_calibration);
+                    /*
                     sys::cuda::d2h_transfer(host_transfer_buf, device_transfer_buf, gpu_workload_transfer_size,
                                             sys::cuda::transfer_t::WORKLOAD);
+                    */
                 }
             } else {
 				if (gpu_calc_cycle_finish)
@@ -675,9 +679,9 @@ namespace async_suite {
     // NOTE2: tover_comm is not zero'ed here before operation!
     void AsyncBenchmark_calc::calc_and_progress_loop(int ncalccycles, int iters_till_test, double &tover_comm) {
 		gpu_calc_cycle_active = true;
-        if (is_cpu_calculations) {
+        if (is_cpu_calculations) { 
             for (int repeat = 0, cnt = iters_till_test; repeat < ncalccycles; repeat++) {
-                if (--cnt == 0) { 
+                if (cnt-- == 0) { 
                     double t1 = MPI_Wtime();
                     if (reqs && num_requests) {
                         for (int r = 0; r < num_requests; r++) {
@@ -712,8 +716,16 @@ namespace async_suite {
         calc_and_progress_loop(ncalccycles, ncalccycles, tover_comm);
     }
 
+    void AsyncBenchmark_calc::calc_loop(int ncalccycles) {
+        double tover_comm;
+        calc_and_progress_loop(ncalccycles, ncalccycles, tover_comm);
+    }
+
     void AsyncBenchmark_calc::calibration() {
 		GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
+        is_cpu_calculations = true;
+        is_gpu_calculations = false;
+        is_omit_calculation_loop = false;
 		int estcycles = p.get("calc_calibration").get_int("estimation_cycles");
         double timings[3];
         if (estcycles == 0) {
@@ -721,9 +733,8 @@ namespace async_suite {
         }
 		int Nrep = (int)(4000000000ul / (unsigned long)(CALC_MATRIX_SIZE*CALC_MATRIX_SIZE*CALC_MATRIX_SIZE));
 		for (int k = 0; k < 3 + estcycles; k++) {
-			double tover = 0;
 			double t1 = MPI_Wtime();
-			calc_loop(Nrep, tover);
+			calc_loop(Nrep);
 			double t2 = MPI_Wtime();
 			if (k >= estcycles)
 				timings[k - estcycles] = t2 - t1;
@@ -801,6 +812,10 @@ namespace async_suite {
         if (p.find("workload")) {
             is_cpu_calculations = p.get("workload").get_bool("cpu_calculations");
             is_gpu_calculations = p.get("workload").get_bool("gpu_calculations");
+            if (!is_cpu_calculations && !is_gpu_calculations) {
+                is_omit_calculation_loop = true;
+            }
+            std::cout << ">> calc::init: is_gpu_calculations: " <<  (is_gpu_calculations?"true":"false") << std::endl;
             if (is_gpu_calculations && !is_gpu) {
                 throw std::runtime_error("GPU workload for calculations requires GPU mode.");
             }
@@ -817,12 +832,15 @@ namespace async_suite {
                 calctime_by_len[len[i]] = (i >= calctime.size() ? (calctime.size() == 0 ? 10000 : calctime[calctime.size() - 1]) : calctime[i]);
             }            
         } else {
+            is_omit_calculation_loop = true;
             is_cpu_calculations = false;
             is_gpu_calculations = false;
             is_manual_progress = false;
         }
         if (is_gpu_calculations) {
+            std::cout << ">> calc::init: rank: " << rank << " before sys::is_it_the_rank_for_gpu_calc()" << std::endl;
             is_gpu_calculations = sys::is_it_the_rank_for_gpu_calc();
+            std::cout << ">> calc::init: rank: " << rank << " after sys::is_it_the_rank_for_gpu_calc() -> " << (is_gpu_calculations?"true":"false") << std::endl;
         }
         for (size_t i = 0; i < CALC_MATRIX_SIZE; i++) {
             x[i] = y[i] = 0.;
@@ -873,7 +891,7 @@ namespace async_suite {
         time = 0;
         tover_comm = 0;
         tover_calc = 0;
-        if (!is_cpu_calculations && !is_gpu_calculations) {
+        if (is_omit_calculation_loop) {
             time = 0;
             return true;
         }
@@ -914,10 +932,10 @@ namespace async_suite {
             constexpr double _1usec = 1e-6;
             if (!pure_calc_time_in_usec)
                 return true;
-            std::cout << ">> pure_calc_time_in_usec: " << pure_calc_time_in_usec << std::endl;
+            //std::cout << ">> pure_calc_time_in_usec: " << pure_calc_time_in_usec << std::endl;
             real_cycles_per_10usec = ncalccycles * 10 / pure_calc_time_in_usec;
-            std::cout << ">> real_cycles_per_10usec: " << real_cycles_per_10usec << std::endl;
-            std::cout << ">> ncalccycles: " << ncalccycles << std::endl;
+            //std::cout << ">> real_cycles_per_10usec: " << real_cycles_per_10usec << std::endl;
+            //std::cout << ">> ncalccycles: " << ncalccycles << std::endl;
             if (cycles_per_10usec && real_cycles_per_10usec) {
                 int ncalccycles_expected = pure_calc_time_in_usec * cycles_per_10usec / 10;
                 tover_calc = (double)(ncalccycles_expected - ncalccycles) / (double)real_cycles_per_10usec * _10usec; 
