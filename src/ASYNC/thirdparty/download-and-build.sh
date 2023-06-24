@@ -35,13 +35,15 @@ function build() {
 }
 
 function install() {
-    mkdir -p include
-    mkdir -p lib
-    cp -v argsparser-$ARGSPARSER_VERSION/argsparser.h include/
-    cp -v argsparser-$ARGSPARSER_VERSION/libargsparser.so lib/
-    cp -rv argsparser-$ARGSPARSER_VERSION/extensions include
-    cp -av yaml-cpp/include/yaml-cpp include/ 
-    cp -av yaml-cpp/lib/* lib/
+    mkdir -p argsparser.bin/include
+    mkdir -p argsparser.bin/lib
+    mkdir -p yaml-cpp.bin/include
+    mkdir -p yaml-cpp.bin/lib
+    cp -v argsparser-$ARGSPARSER_VERSION/argsparser.h argsparser.bin
+    cp -v argsparser-$ARGSPARSER_VERSION/libargsparser.so argsparser.bin
+    cp -rv argsparser-$ARGSPARSER_VERSION/extensions argsparser.bin
+    cp -av yaml-cpp/include/yaml-cpp yaml-cpp.bin/include
+    cp -av yaml-cpp/lib/* yaml-cpp.bin/lib/
 }
 
 download
