@@ -339,8 +339,8 @@ namespace async_suite {
         }
         size_t b = (size_t)count * (size_t)dtsize;
         size_t n = allocated_size / b;
-        double t1 = 0, t2 = 0, ctime = 0, total_ctime = 0, total_tover_comm = 0, total_tover_calc = 0, 
-                                          local_ctime = 0, local_tover_comm = 0, local_tover_calc = 0;
+        double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0, 
+                                              local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         const int tag = 1;
         auto comm_actions = topo->comm_actions();
         calc.num_requests = topo->get_num_actions();
@@ -364,11 +364,12 @@ namespace async_suite {
                               &requests[nr++]);
                 }
             }
-            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_tover_calc);
+            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
+            
             if (i >= nwarmup) {
                 total_ctime += local_ctime;
                 total_tover_comm += local_tover_comm;
-                total_tover_calc += local_tover_calc;
+                total_calc_slowdown_ratio += local_calc_slowdown_ratio;
             }
             MPI_Waitall(calc.num_requests, requests, MPI_STATUSES_IGNORE);
             for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
@@ -379,13 +380,15 @@ namespace async_suite {
         }
         t2 = MPI_Wtime();
         time = (t2 - t1) / ncycles;
-        ctime = total_ctime / ncycles;
+        time_calc = total_ctime / ncycles;
         tover_comm = total_tover_comm / ncycles;
-        tover_calc = total_tover_calc / ncycles;
+        double calc_slowdown_ratio = total_calc_slowdown_ratio / ncycles;
+        double time_comm = time - time_calc;
+        tover_calc = time_comm * calc_slowdown_ratio;
         MPI_Barrier(MPI_COMM_WORLD);
         free(requests);
-        results[count] = result { true, time, time - ctime + tover_comm, tover_calc, ncycles };
-        std::cout << ">> ipt2pt::benchmark: rank=" << rank << " time: " << time << " ctime: " << ctime << " tover_comm: " << tover_comm << " tover_calc: " << tover_calc << std::endl;
+        results[count] = result { true, time, time_comm + tover_comm, tover_calc, ncycles };
+        std::cout << ">> ipt2pt::benchmark: rank=" << rank << " time: " << time << " time_calc: " << time_calc << " time_comm: " << time_comm << " tover_comm: " << tover_comm << " tover_calc: " << tover_calc << std::endl;
         return true;
     }
 
@@ -429,8 +432,8 @@ namespace async_suite {
                                               double &time, double &tover_comm, double &tover_calc) {
         size_t b = (size_t)count * (size_t)dtsize;
         size_t n = allocated_size / b;
-        double t1 = 0, t2 = 0, ctime = 0, total_ctime = 0, total_tover_comm = 0, total_tover_calc = 0,
-                                          local_ctime = 0, local_tover_comm = 0, local_tover_calc = 0;
+        double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0,
+                                              local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         time = 0;
         MPI_Request request[1];
         calc.reqs = request;
@@ -440,7 +443,7 @@ namespace async_suite {
             if (i >= nwarmup) t1 = MPI_Wtime();
             update_sbuf((i%n)*b, b);
             MPI_Iallreduce(get_sbuf() + (i%n)*b, get_rbuf() + (i%n)*b, count, datatype, MPI_SUM, MPI_COMM_WORLD, request);
-            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_tover_calc);
+            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
             MPI_Wait(request, &status);
             update_rbuf((i%n)*b, b);
             if (i >= nwarmup) {
@@ -448,7 +451,7 @@ namespace async_suite {
                 time += (t2 - t1);
                 total_ctime += local_ctime;
                 total_tover_comm += local_tover_comm;
-                total_tover_calc += local_tover_calc;
+                total_calc_slowdown_ratio += local_calc_slowdown_ratio;
             }
             barrier(rank, np);
 #if ASYNC_EXTRA_BARRIER
@@ -459,11 +462,13 @@ namespace async_suite {
 #endif
         }
         time /= ncycles;
-        ctime = total_ctime / ncycles;
+        time_calc = total_ctime / ncycles;
         tover_comm = total_tover_comm / ncycles;
-        tover_calc = total_tover_calc / ncycles;
+        double calc_slowdown_ratio = total_calc_slowdown_ratio / ncycles;
+        double time_comm = time - time_calc;
+        tover_calc = time_comm * calc_slowdown_ratio;
         MPI_Barrier(MPI_COMM_WORLD);
-        results[count] = result { true, time, time - ctime + tover_comm, tover_calc, ncycles };
+        results[count] = result { true, time, time_comm + tover_comm, tover_calc, ncycles };
         return true;
     }
 
@@ -508,8 +513,8 @@ namespace async_suite {
                                          double &time, double &tover_comm, double &tover_calc) {         
         size_t b = (size_t)count * (size_t)dtsize * buf_size_multiplier();
         size_t n = allocated_size / b;
-        double t1 = 0, t2 = 0, ctime = 0, total_ctime = 0, total_tover_comm = 0, total_tover_calc = 0,
-                                          local_ctime = 0, local_tover_comm = 0, local_tover_calc = 0;
+        double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0,
+                                              local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         time = 0;
         if (!topo->is_active()) {
             MPI_Barrier(MPI_COMM_WORLD);
@@ -525,7 +530,7 @@ namespace async_suite {
             MPI_Ineighbor_alltoall(get_sbuf() + (i%n)*b, count, datatype,
                                    get_rbuf() + (i%n)*b, count, datatype,
                                    graph_comm, request);
-            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_tover_calc);
+            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
             MPI_Wait(request, &status);
             update_rbuf((i%n)*b, b);
             if (i >= nwarmup) {
@@ -533,7 +538,7 @@ namespace async_suite {
                 time += (t2 - t1);
                 total_ctime += local_ctime;
                 total_tover_comm += local_tover_comm;
-                total_tover_calc += local_tover_calc;
+                total_calc_slowdown_ratio += local_calc_slowdown_ratio;
             }
             barrier(rank, np);
 #if ASYNC_EXTRA_BARRIER
@@ -544,11 +549,13 @@ namespace async_suite {
 #endif
         }
         time /= ncycles;
-        ctime = total_ctime / ncycles;
+        time_calc = total_ctime / ncycles;
         tover_comm = total_tover_comm / ncycles;
-        tover_calc = total_tover_calc / ncycles;
+        double calc_slowdown_ratio = total_calc_slowdown_ratio / ncycles;
+        double time_comm = time - time_calc;
+        tover_calc = time_comm * calc_slowdown_ratio;
         MPI_Barrier(MPI_COMM_WORLD);
-        results[count] = result { true, time, time - ctime + tover_comm, tover_calc, ncycles };
+        results[count] = result { true, time, time_comm + tover_comm, tover_calc, ncycles };
         return true;
     }
 
@@ -594,8 +601,8 @@ namespace async_suite {
         }
         size_t b = (size_t)count * (size_t)dtsize;
         size_t n = allocated_size / b;
-        double t1 = 0, t2 = 0, ctime = 0, total_ctime = 0, total_tover_comm = 0, total_tover_calc = 0,
-                                          local_ctime = 0, local_tover_comm = 0, local_tover_calc = 0;
+        double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0,
+                                              local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         auto comm_actions = topo->comm_actions();
         MPI_Request *requests;
         requests = (MPI_Request *)calloc(sizeof(MPI_Request), topo->get_num_actions());
@@ -627,7 +634,7 @@ namespace async_suite {
                             count, datatype, win, &requests[nr++]);
                 }
             }
-            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_tover_calc);
+            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
             MPI_Waitall(calc.num_requests, requests, MPI_STATUSES_IGNORE);
             for (auto r : ranks) {
                 if (lock_ranks[r]) {
@@ -639,17 +646,19 @@ namespace async_suite {
             if (i >= nwarmup) {
                 total_ctime += local_ctime;
                 total_tover_comm += local_tover_comm;
-                total_tover_calc += local_tover_calc;
+                total_calc_slowdown_ratio += local_calc_slowdown_ratio;
             }
         }
         t2 = MPI_Wtime();
         time = (t2 - t1) / ncycles;
-        ctime = total_ctime / ncycles;
+        time_calc = total_ctime / ncycles;
         tover_comm = total_tover_comm / ncycles;
-        tover_calc = total_tover_calc / ncycles;
+        double calc_slowdown_ratio = total_calc_slowdown_ratio / ncycles;
+        double time_comm = time - time_calc;
+        tover_calc = time_comm * calc_slowdown_ratio;
         MPI_Barrier(MPI_COMM_WORLD);
         free(requests);
-        results[count] = result { true, time, time - ctime + tover_comm, tover_calc, ncycles };
+        results[count] = result { true, time, time_comm + tover_comm, tover_calc, ncycles };
         return true;
     }
 
@@ -927,8 +936,6 @@ namespace async_suite {
         time = (t2 - t1);
         if (is_cpu_calculations) {
             int pure_calc_time_in_usec = int((time - tover_comm) * 1e6);
-            constexpr double _10usec = 1e-5;
-            constexpr double _2usec = 2e-6;
             if (!pure_calc_time_in_usec)
                 return true;
             std::cout << ">> rank=" << rank << " pure_calc_time_in_usec: " << pure_calc_time_in_usec << std::endl;
@@ -937,9 +944,11 @@ namespace async_suite {
             std::cout << ">> rank=" << rank << " ncalccycles: " << ncalccycles << std::endl;
             if (cycles_per_10usec && real_cycles_per_10usec) {
                 int ncalccycles_expected = pure_calc_time_in_usec * cycles_per_10usec / 10;
-                tover_calc = (double)(ncalccycles_expected - ncalccycles) / (double)real_cycles_per_10usec * _10usec; 
-                if (tover_calc < _2usec)
-                    tover_calc = 0;
+                double ratio = 0;
+                if (ncalccycles < ncalccycles_expected) {
+                    ratio = (double)ncalccycles_expected / (double)ncalccycles - 1.0;
+                }
+                tover_calc = ratio;
             }
         } else {
             tover_calc = 0;
