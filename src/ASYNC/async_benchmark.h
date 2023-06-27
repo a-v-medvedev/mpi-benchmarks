@@ -44,7 +44,7 @@ class topohelper;
 namespace async_suite {
     static constexpr size_t ASSUMED_CACHE_SIZE = 4 * 1024 * 1024;
     static constexpr int MAX_REQUESTS_NUM = 10;
-    static constexpr size_t CALC_MATRIX_SIZE = 7;
+    static constexpr size_t CALC_MATRIX_SIZE = 3;
     class AsyncBenchmark : public Benchmark {
         public:
         struct result {

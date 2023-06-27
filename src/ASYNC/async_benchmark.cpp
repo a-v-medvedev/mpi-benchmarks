@@ -690,7 +690,7 @@ namespace async_suite {
     void AsyncBenchmark_calc::calc_and_progress_loop(int ncalccycles, int iters_till_test, double &tover_comm) {
         gpu_calc_cycle_active = true;
         if (is_cpu_calculations) { 
-            for (int repeat = 0, cnt = iters_till_test; repeat < ncalccycles; repeat++) {
+            for (volatile int repeat = 0, cnt = iters_till_test; repeat < ncalccycles; repeat++) {
                 if (cnt-- == 0) { 
                     double t1 = MPI_Wtime();
                     if (reqs && num_requests) {
@@ -708,9 +708,9 @@ namespace async_suite {
                     tover_comm += (t2 - t1);
                     cnt = iters_till_test;
                 } 
-                for (size_t i = 0; i < CALC_MATRIX_SIZE; i++) {
-                    for (size_t j = 0; j < CALC_MATRIX_SIZE; j++) {
-                        for (size_t k = 0; k < CALC_MATRIX_SIZE; k++) {
+                for (volatile size_t i = 0; i < CALC_MATRIX_SIZE; i++) {
+                    for (volatile size_t j = 0; j < CALC_MATRIX_SIZE; j++) {
+                        for (volatile size_t k = 0; k < CALC_MATRIX_SIZE; k++) {
                             c[i][j] += a[i][k] * b[k][j] + repeat*repeat;
                         }
                     }
@@ -741,7 +741,7 @@ namespace async_suite {
         if (estcycles == 0) {
             throw std::runtime_error("AsyncBenchmark_calc: either -cycles_per_10usec or -estcycles option is required.");
         }
-        int Nrep = (int)(4000000000ul / (unsigned long)(CALC_MATRIX_SIZE*CALC_MATRIX_SIZE*CALC_MATRIX_SIZE));
+        int Nrep = (int)(200000ul / (unsigned long)(CALC_MATRIX_SIZE*CALC_MATRIX_SIZE*CALC_MATRIX_SIZE));
         for (int k = 0; k < 3 + estcycles; k++) {
             double t1 = MPI_Wtime();
             calc_loop(Nrep);
