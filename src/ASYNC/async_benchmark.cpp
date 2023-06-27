@@ -279,7 +279,7 @@ namespace async_suite {
         }
         yaml_topo.add("np", np);
         //yaml_topo.add("stride", stride);
-        WriteOutYaml(yaml_out, get_name(), {yaml_tavg, yaml_over_full, yaml_topo});
+        WriteOutYaml(yaml_out, get_name(), {yaml_tavg, yaml_tmin, yaml_tmax, yaml_over_full, yaml_over_comm, yaml_over_calc, yaml_topo});
 
         // NOTE: can't free pinned memory in destructor, CUDA runtime complains
         // it's too late
