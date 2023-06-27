@@ -741,7 +741,7 @@ namespace async_suite {
         if (estcycles == 0) {
             throw std::runtime_error("AsyncBenchmark_calc: either -cycles_per_10usec or -estcycles option is required.");
         }
-        int Nrep = (int)(200000ul / (unsigned long)(CALC_MATRIX_SIZE*CALC_MATRIX_SIZE*CALC_MATRIX_SIZE));
+        int Nrep = (int)(2000000ul / (unsigned long)(CALC_MATRIX_SIZE*CALC_MATRIX_SIZE*CALC_MATRIX_SIZE));
         for (int k = 0; k < 3 + estcycles; k++) {
             double t1 = MPI_Wtime();
             calc_loop(Nrep);
