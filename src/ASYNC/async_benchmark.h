@@ -92,6 +92,7 @@ namespace async_suite {
         bool is_cpu_calculations = false;
         bool is_gpu_calculations = false;
         bool is_omit_calculation_loop = false;
+        bool is_omit_calulation_overhead_estimation = false;
 
         int gpu_workload_calibration = 0;
         char *host_transfer_buf = nullptr; 

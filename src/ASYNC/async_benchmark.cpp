@@ -263,8 +263,8 @@ namespace async_suite {
                 } else {
                     std::cout << get_name() << ": " << "{ " << "len: " << len << ", "
                         << "ncycles: " << (it->second).ncycles << ", "
-                        << " time: [ " << tmin << ", " 
-                                      << tavg << ", " 
+                        << " time: [ " << tavg << ", " 
+                                      << tmin << ", " 
                                       << tmax << " ]" 
                         << ", overhead: [ " << tover_comm << " , " << tover_calc 
                                       << " ] }" << std::endl;
@@ -278,11 +278,10 @@ namespace async_suite {
             }
         }
         yaml_topo.add("np", np);
-        //yaml_topo.add("stride", stride);
         WriteOutYaml(yaml_out, get_name(), {yaml_tavg, yaml_tmin, yaml_tmax, yaml_over_full, yaml_over_comm, yaml_over_calc, yaml_topo});
 
         // NOTE: can't free pinned memory in destructor, CUDA runtime complains
-        // it's too late
+        // that it's too late
         sys::host_mem_free(host_sbuf, host_alloc_mode);
         sys::host_mem_free(host_rbuf, host_alloc_mode);
         sys::device_mem_free(device_sbuf, sys::device_alloc_t::DA_CUDA);
@@ -668,7 +667,7 @@ namespace async_suite {
             return;
         while (true) {
             if (gpu_calc_cycle_active && sys::cuda::is_device_idle()) {
-                std::cout << ">> rank=" << rank << " submit GPU workload; gpu_workload_calibration=" << gpu_workload_calibration << std::endl;
+                //std::cout << ">> rank=" << rank << " submit GPU workload; gpu_workload_calibration=" << gpu_workload_calibration << std::endl;
                 for (int i = 0; i < 5; i++) {
                     sys::cuda::submit_workload(gpu_workload_ncycles, gpu_workload_calibration);
                     if (gpu_workload_transfer_size != 0) {
@@ -755,9 +754,8 @@ namespace async_suite {
                     } else if (t2 - t1 > 0.001 && t2 - t1 < 0.5) {
                         Nrep = (int)((double)Nrep * 1.0 / (t2 - t1));
                     } else if (t2 - t1 < 0.001) {
-                        std::cout << ">> cycles_per_10usec: too little measuring time."
+                        std::cout << ">> ERROR: cycles_per_10usec: too little measuring time."
                             << " You may increase CALC_MATRIX_SIZE constant." << std::endl;
-
                         throw std::runtime_error("cycles_per_10usec: calibration cycle error: too little measuring time");
                     }
                 }
@@ -831,6 +829,7 @@ namespace async_suite {
             if (is_cpu_calculations) {
                 is_manual_progress = p.get("workload").get_bool("manual_progress");
                 cycles_per_10usec = p.get("workload").get_int("cycles_per_10usec");
+                is_omit_calulation_overhead_estimation = p.get("workload").get_bool("omit_calc_over_est");
             } else {
                 if (p.get("workload").get_bool("manual_progress")) {
                     throw std::runtime_error("Manual progress works only when CPU calculations are switched on.");
@@ -929,19 +928,15 @@ namespace async_suite {
                 if (i == nwarmup) 
                     t1 = MPI_Wtime();
                 calc_loop(ncalccycles, tover_comm);
-                std::cout << ">> rank=" << rank << " tover_comm: " << tover_comm << std::endl;
             }
         }
         t2 = MPI_Wtime();
         time = (t2 - t1);
-        if (is_cpu_calculations) {
+        if (is_cpu_calculations && !is_omit_calulation_overhead_estimation) {
             int pure_calc_time_in_usec = int((time - tover_comm) * 1e6);
             if (!pure_calc_time_in_usec)
                 return true;
-            std::cout << ">> rank=" << rank << " pure_calc_time_in_usec: " << pure_calc_time_in_usec << std::endl;
             real_cycles_per_10usec = ncalccycles * 10 / pure_calc_time_in_usec;
-            std::cout << ">> rank=" << rank << " real_cycles_per_10usec: " << real_cycles_per_10usec << std::endl;
-            std::cout << ">> rank=" << rank << " ncalccycles: " << ncalccycles << std::endl;
             if (cycles_per_10usec && real_cycles_per_10usec) {
                 int ncalccycles_expected = pure_calc_time_in_usec * cycles_per_10usec / 10;
                 double ratio = 0;

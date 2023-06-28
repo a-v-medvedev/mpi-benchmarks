@@ -110,6 +110,7 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
             {"manual_progress",     {value::B, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
             {"spin_period",         {value::I, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
             {"cycles_per_10usec",   {value::I, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
+            {"omit_calc_over_est",  {value::B, NONCHANGEABLE, {"workload"}, NOMINMAX,   ALLALLOWED}},
             {"estimation_cycles",   {value::I, NONCHANGEABLE, {"calc_calibration"}, NOMINMAX, ALLALLOWED}},
         };
         return expected_params;
@@ -133,6 +134,7 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
             list.set_value_if_missing<bool>("cpu_calculations", false);
             list.set_value_if_missing<bool>("gpu_calculations", false);
             list.set_value_if_missing<bool>("manual_progress", false);
+            list.set_value_if_missing<bool>("omit_calc_over_est", false);
             if (list.get_bool("cpu_calculations")) {
                 if (list.get_bool("manual_progress")) {
                     list.set_value_if_missing<uint32_t>("spin_period", 50);
