@@ -140,7 +140,7 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
                     list.set_value_if_missing<uint32_t>("spin_period", 50);
                 }
                 list.set_value_if_missing<uint32_t>("cycles_per_10usec", 0);
-                if (list.get_int("cycles_per_10usec") == 0) {
+                if (list.get_int("cycles_per_10usec") == 0 && !list.get_bool("omit_calc_over_est")) {
 					throw std::runtime_error("params: for 'cpu_calculations' workload: calibration parameter"
                                              " 'cycles_per_10usec' is obligatory. Run calc_calibration first!");
                 }
