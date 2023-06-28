@@ -904,7 +904,7 @@ namespace async_suite {
         double t1 = 0, t2 = 0;
         
         if (cycles_per_10usec == 0) {
-            if (is_cpu_calculations) {
+            if (is_cpu_calculations && !is_omit_calulation_overhead_estimation) {
                 throw std::runtime_error("Wrong cycles_per_10usec constant value.");
             }
             cycles_per_10usec = 10;
