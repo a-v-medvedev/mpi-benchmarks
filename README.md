@@ -3,7 +3,7 @@
 
 --------------------------------------------------
 
-The IMB-ASYNC benchmark suite is a collection of microbenchmark tools which
+The IMB-ASYNC benchmark suite is a collection of microbenchmark tools that
 help to fairly estimate the MPI asynchronous progress performance (computation-communication overlap) 
 in many useful scenarios.
 
@@ -52,6 +52,6 @@ This benchmark suite inherits 3-Clause BSD License terms of Intel(R) MPI Benchma
 which it is based on.
 
 
-(C) Intel Corporation
+(C) Intel Corporation (2016-2018)
 
-(C) Alexey V. Medvedev (2019-2021)
+(C) Alexey V. Medvedev (2019-2023)
