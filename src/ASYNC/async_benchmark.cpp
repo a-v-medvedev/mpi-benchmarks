@@ -387,7 +387,6 @@ namespace async_suite {
         MPI_Barrier(MPI_COMM_WORLD);
         free(requests);
         results[count] = result { true, time, time_comm + tover_comm, tover_calc, ncycles };
-        std::cout << ">> ipt2pt::benchmark: rank=" << rank << " time: " << time << " time_calc: " << time_calc << " time_comm: " << time_comm << " tover_comm: " << tover_comm << " tover_calc: " << tover_calc << std::endl;
         return true;
     }
 
