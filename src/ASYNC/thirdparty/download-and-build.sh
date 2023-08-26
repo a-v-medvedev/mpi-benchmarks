@@ -2,7 +2,7 @@
 
 set -e 
 
-ARGSPARSER_VERSION=0.0.13
+ARGSPARSER_VERSION=0.1.2
 YAML_VERSION=0.7.0
 
 function download() {
@@ -24,14 +24,14 @@ function build() {
     [ -e build ] && rm -rf build
     mkdir -p build
     cd build
-    cmake -DBUILD_SHARED_LIBS=ON -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF .. -DCMAKE_INSTALL_PREFIX=$PWD/../../yaml-cpp
+    cmake -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF .. -DCMAKE_INSTALL_PREFIX=$PWD/../../yaml-cpp
     make clean
     make -j
     make install
     cd ../..
     [ -d yaml-cpp/lib64 -a ! -e yaml-cpp/lib ] && ln -s lib64 yaml-cpp/lib
 
-    cd argsparser-$ARGSPARSER_VERSION && make && cd ..
+    cd argsparser-$ARGSPARSER_VERSION && make WITH_SHARED_LIB=FALSE && cd ..
 }
 
 function install() {
@@ -40,7 +40,7 @@ function install() {
     mkdir -p yaml-cpp.bin/include
     mkdir -p yaml-cpp.bin/lib
     cp -v argsparser-$ARGSPARSER_VERSION/argsparser.h argsparser.bin
-    cp -v argsparser-$ARGSPARSER_VERSION/libargsparser.so argsparser.bin
+    cp -v argsparser-$ARGSPARSER_VERSION/libargsparser.a argsparser.bin
     cp -rv argsparser-$ARGSPARSER_VERSION/extensions argsparser.bin
     cp -av yaml-cpp/include/yaml-cpp yaml-cpp.bin/include
     cp -av yaml-cpp/lib/* yaml-cpp.bin/lib/

@@ -45,4 +45,4 @@ BECHMARK_SUITE_SRC += ASYNC/async_cuda.cu ASYNC/async_mpi.cpp
 endif
 
 override CXXFLAGS += -IASYNC/thirdparty/argsparser.bin -IASYNC/thirdparty/yaml-cpp.bin/include
-override LDFLAGS += -LASYNC/thirdparty/argsparser.bin -Wl,-rpath=ASYNC/thirdparty/argsparser.bin -LASYNC/thirdparty/yaml-cpp.bin/lib -Wl,-rpath=ASYNC/thirdparty/yaml-cpp.bin/lib -Wl,-rpath=. -lyaml-cpp -largsparser
+override LDFLAGS += ASYNC/thirdparty/argsparser.bin/libargsparser.a ASYNC/thirdparty/yaml-cpp.bin/lib/libyaml-cpp.a
