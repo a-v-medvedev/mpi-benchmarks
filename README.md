@@ -68,25 +68,19 @@ The topogies listed below are meaningful for collective communication benchmarks
 
 The topology and its parameters are defined for each benchmark separately. The command line (or equivalent YAML-file) option is: `-BENCH_params`, where `BENHCH` stands for one of short benchmark names: `pt2pt`, `na2a`, `rma_pt2pt`, `allreduce`. The parameter value for these options are list on definitions in the form: `keyword=value:keyword=value:...`, where keyword is either `topology` to denote the communication topology, or the parameter names for a selected topology. For example:
 
-    * Option:`-pt2pt_params topology=ping-pong:stride=1:bidirectional=false` sets up the `ping-pong` pairwise topology for both `sync_pt2pt` and `async_pt2pt` benchmarks, and defines the parameters of it
-
-    * Option: `-allreduce_params topology=split:combination=split:nparts=2` sets up the `split` topology for both `sync_allreduce` and `async_allreduce` bechmarks.
+* Option: `-pt2pt_params topology=ping-pong:stride=1:bidirectional=false` sets up the `ping-pong` pairwise topology for both `sync_pt2pt` and `async_pt2pt` benchmarks, and defines the parameters of it
+* Option: `-allreduce_params topology=split:combination=split:nparts=2` sets up the `split` topology for both `sync_allreduce` and `async_allreduce` bechmarks.
 
 ## Calculation workload options
 
 The option `-workload_params` controls the background calculation load cycle parameters. The syntax for this option is similar to `-BENCH_params` syntax, i.e. has the form: `keyword=value:keyword=value:...`. The keywords are:
 
-    * `cpu_calculations` -- `true`/`false`: to run or not the CPU load cycle in `async` versions of benchmarks. The CPU load cycle is a simplest small DGEMM kernel running is a loop. The number of cycles for the loops can be calibrated so that the runtime of the workload cycle could be tuned with 10 usec precision.
-
-    * `gpu_calcullations` -- `true`/`false`: to run on not the CUDA kernel with similar DGEMM calculations that may accompany the CPU cycle. Is meaningful only when CPU load cycle is switched on. The time for this cycle is assumed to be close the CPU load cycle time, but is kept with less precision and can be a bit more lenghthy. Doesn't require a calibration.
-
-    * `cycles_per_10_usec` -- is a calibration parameter, that must be received by previos calibration run.
-
-    * `omit_calc_over_est` -- `true`/`false`: can be used to omit the calculation slowdown impact estimation. Is useful when calculation slowdown in async comunication modes is not expected, or we explicitely omit this estimation due to low realibility of it on a specific system (due to uncontrolled CPU frequency changes or similar hardware effects).
-
-    * `manual_progress` -- `true`/`false`: in CPU cycle, activate the regular `MPI_Test` function calls to facilitate `manual progress` mode.
-
-    * `spin_period` -- in usecs, set the `spin period`, i.e. time distance between sequential `MPI_Test` calls for `manual progress` mode.
+* `cpu_calculations` -- `true`/`false`: to run or not the CPU load cycle in `async` versions of benchmarks. The CPU load cycle is a simplest small DGEMM kernel running is a loop. The number of cycles for the loops can be calibrated so that the runtime of the workload cycle could be tuned with 10 usec precision.
+* `gpu_calcullations` -- `true`/`false`: to run on not the CUDA kernel with similar DGEMM calculations that may accompany the CPU cycle. Is meaningful only when CPU load cycle is switched on. The time for this cycle is assumed to be close the CPU load cycle time, but is kept with less precision and can be a bit more lenghthy. Doesn't require a calibration.
+* `cycles_per_10_usec` -- is a calibration parameter, that must be received by previos calibration run.
+* `omit_calc_over_est` -- `true`/`false`: can be used to omit the calculation slowdown impact estimation. Is useful when calculation slowdown in async comunication modes is not expected, or we explicitely omit this estimation due to low realibility of it on a specific system (due to uncontrolled CPU frequency changes or similar hardware effects).
+* `manual_progress` -- `true`/`false`: in CPU cycle, activate the regular `MPI_Test` function calls to facilitate `manual progress` mode.
+* `spin_period` -- in usecs, set the `spin period`, i.e. time distance between sequential `MPI_Test` calls for `manual progress` mode.
 
 ## CPU load loop calibration
 
