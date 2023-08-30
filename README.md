@@ -46,7 +46,10 @@ All of the communication topologies from the list below make sense for the bench
 
 - `neighb` -- is the topology if exchange with two, four or more closest neighbour ranks. The difference with pairwise communication pattern, where each rank has always the only one peer for communication, the exchanges in `neighb` topology is arranged for power-of-two number of peers: the closest neighbour ranks that are greater and smaller than the rank in question. The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
 
-    * `nneighb` -- the number of neighbours on each side to communicate with. For example, for `nneighb=2` parameter value, the rank with number `N` is going to exchange data with ranks `N-1`, `N-2`, `N+1`, `N+2`. The defautt value for this parameter in `nneighb=1`.
+    * `nneighb` -- the number of neighbours on each side to communicate with. For example:
+        - for `nneighb=2` parameter value, the rank with number `N` is going to exchange data with ranks `N-1`, `N-2`, `N+1`, `N+2`. 
+        - for `nneighb=3` parameter value, the rank with number `N` is going to exchange data with ranks `N-1`, `N-2`, `N-3` `N+1`, `N+2`, `N+3`. 
+    The defaut value for this parameter in `nneighb=1`.
     * `bidirectional` -- has the same meaning as for the `ping-pong` topology.
 
 - `halo` -- is the topology of N-dimentional halo-exchange pattern. The number of peers for communication depends on the number of dimensions. For 1D exchange, the topology appears to be equivalent to `neighb` topology with `nneighb=1`. For 2D, 3D, 4D cases the number of peers is twice the number of dimensions, and the specific set of ranks to communicate is defined by linearization of the N-dimensional topology.  The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
@@ -60,9 +63,13 @@ The topogies listed below are meaningful for collective communication benchmarks
 
 - `split` -- is the way to split the `MPI_COMM_WORLD` communicator into separate groups, so that the collective communication happens withing each of those sections independently. The collective communication function that is measured on this rank topology depends on the specific benchmark. The parameters that tune this topology are:
 
-    * `combination` -- `split`/`interleaved`: the way ranks are combined. For `split` option, the sequential ranks form groups; for `interleaved` option, the groups are interleaving. For example, 8 ranks that are split into 4 groups with `combination=split`, the correspondance of ranks and groups looks like this: `{ rank=0: group=0; rank=1: group=0; rank=2: group=1; rank=3: group=1; rank=4: group=2; rank=5: group=2; rank=6: group=3; rank=7: group=3 }`. For the same case but with `combination=interleaved`, the correspondance looks differenly: `{ rank=0: group=0; rank=1: group=1; rank=2: group=2; rank=3: group=3; rank=4: group=0; rank=5: group=1; rank=6: group=2; rank=7: group=3 }`.
-    * `nparts` -- an integer that defines the number of groups to split `MPI_COMM_WORLD` into. Default value is `nparts=1`, that is: no splitting, the whole `MPI_COMM_WORLD` is used for collective communication.
-    * `nactive` -- an integer parameter, that is applicable only to `combination=interleaved` case. It defines how many of the groups are going to be inactive, that means, simply skipping any communication. This is a useful parameter to define sparse collective communication topologies. For example, for 8 ranks split into 2 groups in the interleaved manner, we can define `nactive=1`, and get the topology: `{ rank=0: group=0; rank=1: IDLE; rank=2: IDLE; rank=3: IDLE; rank=4: group 0; rank=5: IDLE; rank=6: IDLE; rank=7: IDLE }`. The default value is `nactive=nparts`.
+    * `combination` -- `split`/`interleaved`: the way ranks are combined. For `split` option, the sequential ranks form groups; for `interleaved` option, the groups are interleaving. For example:
+        - 8 ranks that are split into 4 groups with `combination=split`, the correspondance of ranks and groups looks like this: `{ rank=0: group=0; rank=1: group=0; rank=2: group=1; rank=3: group=1; rank=4: group=2; rank=5: group=2; rank=6: group=3; rank=7: group=3 }`. 
+        - for the same case but with `combination=interleaved`, the correspondance looks differenly: `{ rank=0: group=0; rank=1: group=1; rank=2: group=2; rank=3: group=3; rank=4: group=0; rank=5: group=1; rank=6: group=2; rank=7: group=3 }`.
+    * `nparts` -- an integer that defines the number of groups to split `MPI_COMM_WORLD` into. The default value is `nparts=1`, that is: no splitting, the whole `MPI_COMM_WORLD` is used for collective communication.
+    * `nactive` -- an integer parameter, that is applicable only to `combination=interleaved` case. It defines how many of the groups are going to be inactive, that means, simply skipping any communication. This is a useful parameter to define sparse collective communication topologies. For example: 
+        * for 8 ranks split into 2 groups in the interleaved manner, we can define `nactive=1`, and get the topology: `{ rank=0: group=0; rank=1: IDLE; rank=2: IDLE; rank=3: IDLE; rank=4: group 0; rank=5: IDLE; rank=6: IDLE; rank=7: IDLE }`. 
+    The default value is `nactive=nparts`.
 
 ### Setting up the topology options
 
