@@ -9,8 +9,8 @@ The IMB-ASYNC benchmark suite is a collection of microbenchmark tools that help 
 
 The benchmak and the methodology is described in:
 ```
-Alexey V. Medvedev "IMB-ASYNC: a revised method and benchmark to estimate 
-MPI-3 asynchronous progress efficiency". Cluster Computing (2022) 25:2683–2697
+Alexey V. Medvedev "IMB-ASYNC: a revised method and benchmark to estimate MPI-3
+asynchronous progress efficiency". Cluster Computing (2022) 25:2683–2697
 ```
 DOI: [10.1007/s10586-021-03452-8](https://doi.org/10.1007/s10586-021-03452-8)
 
@@ -47,8 +47,9 @@ All of the communication topologies from the list below make sense for the bench
 
     * `nneighb` -- the number of neighbours on each side to communicate with. For example:
         - for `nneighb=2` parameter value, the rank with number `N` is going to exchange data with ranks `N-1`, `N-2`, `N+1`, `N+2`. 
-        - for `nneighb=3` parameter value, the rank with number `N` is going to exchange data with ranks `N-1`, `N-2`, `N-3` `N+1`, `N+2`, `N+3`. 
-    The defaut value for this parameter in `nneighb=1`.
+        - for `nneighb=3` parameter value, the rank with number `N` is going to exchange data with ranks `N-1`, `N-2`, `N-3` `N+1`, `N+2`, `N+3`.
+
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The defaut value for this parameter in `nneighb=1`.
     * `bidirectional` -- has the same meaning as for the `ping-pong` topology.
 
 - `halo` -- is the topology of N-dimentional halo-exchange pattern. The number of peers for communication depends on the number of dimensions. For 1D exchange, the topology appears to be equivalent to `neighb` topology with `nneighb=1`. For 2D, 3D, 4D cases the number of peers is twice the number of dimensions, and the specific set of ranks to communicate is defined by linearization of the N-dimensional topology.  The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
@@ -64,11 +65,15 @@ The topogies listed below are meaningful for collective communication benchmarks
 
     * `nparts` -- an integer that defines the number of groups to split `MPI_COMM_WORLD` into. The default value is `nparts=1`, that is: no splitting, the whole `MPI_COMM_WORLD` is used for collective communication.
     * `combination` -- `split`/`interleaved`: the way ranks are combined. For `split` option, the sequential ranks form groups; for `interleaved` option, the groups are interleaving. For example:
-        - 8 ranks that are split into 4 groups with `combination=split`. The correspondance of ranks and groups looks like this: `{ rank=0: group=0; rank=1: group=0; rank=2: group=1; rank=3: group=1; rank=4: group=2; rank=5: group=2; rank=6: group=3; rank=7: group=3 }`. 
-        - the same case but with `combination=interleaved`. The correspondance looks differenly: `{ rank=0: group=0; rank=1: group=1; rank=2: group=2; rank=3: group=3; rank=4: group=0; rank=5: group=1; rank=6: group=2; rank=7: group=3 }`.
+        - 8 ranks that are split into 4 groups with `combination=split`. The correspondance of ranks and groups looks like this:\
+          `{ rank=0: group=0; rank=1: group=0; rank=2: group=1; rank=3: group=1; rank=4: group=2; rank=5: group=2; rank=6: group=3; rank=7: group=3 }`. 
+        - the same case but with `combination=interleaved`. The correspondance looks differenly:\
+          `{ rank=0: group=0; rank=1: group=1; rank=2: group=2; rank=3: group=3; rank=4: group=0; rank=5: group=1; rank=6: group=2; rank=7: group=3 }`.
     * `nactive` -- an integer parameter, that is applicable only to `combination=interleaved` case. It defines how many of the groups are going to be inactive, that means, simply skipping any communication. This is a useful parameter to define sparse collective communication topologies. For example: 
-        * for 8 ranks split into 2 groups in the interleaved manner, we can define `nactive=1`, and get the topology: `{ rank=0: group=0; rank=1: IDLE; rank=2: IDLE; rank=3: IDLE; rank=4: group 0; rank=5: IDLE; rank=6: IDLE; rank=7: IDLE }`. 
-    The default value is `nactive=nparts`.
+        * for 8 ranks split into 2 groups in the interleaved manner, we can define `nactive=1`, and get the topology:\
+          `{ rank=0: group=0; rank=1: IDLE; rank=2: IDLE; rank=3: IDLE; rank=4: group 0; rank=5: IDLE; rank=6: IDLE; rank=7: IDLE }`. 
+    
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The default value is `nactive=nparts`.
 
 ### Setting up the topology options
 
