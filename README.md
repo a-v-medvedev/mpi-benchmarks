@@ -7,28 +7,27 @@ The IMB-ASYNC benchmark suite is a collection of microbenchmark tools that help 
 
 ## Citation
 
-The benchmak and the methodology is described in:
+The benchmark and the methodology is described in:
 ```
 Alexey V. Medvedev "IMB-ASYNC: a revised method and benchmark to estimate MPI-3
 asynchronous progress efficiency". Cluster Computing (2022) 25:2683–2697
 ```
-DOI: [10.1007/s10586-021-03452-8](https://doi.org/10.1007/s10586-021-03452-8)
-
+DOI: [10.1007/s10586-021-03452-8](https://doi.org/10.1007/s10586-021-03452-8)\
 Full text: [here](https://www.researchgate.net/publication/357865882_IMB-ASYNC_a_revised_method_and_benchmark_to_estimate_MPI-3_asynchronous_progress_efficiency#fullTextFileContent)
 
 Please make a citation of this paper if you use this benchmark code in research.
 
 ## Build notes
 
-The benchmark requires two small libraries for command line and config parsing. The download and build script for these libraries is placed in the `src/ASYNC/thirdparty` directory. It must download, build and install the resulting files in a right place. The benchmark build code will link these libraries statically into the resulting benchmark binary.
+The benchmark requires two small libraries for command line and config parsing. The download-and-build script for these libraries is placed in the `src/ASYNC/thirdparty` directory. It must download, build, and install the resulting files in the right place. The benchmark build code will link these libraries statically into the resulting benchmark binary.
 
 ## Benchmark groups
 
-The individual bechmarks include:
-- `sync_pt2p2`, `async_pt2pt` -- point-to-point benchmark where each rank exchanges with a predefined number of other ranks. Communications peers are defined by the topology, described below. Synchronous variant utilizes `MPI_Send()`/`MPI_Recv()` function calls. Asynchronous variant uses equivalent `MPI_Isend()`/`MPI_Irev()`/`MPI_Wait()` combination, and pure calculation workload is optionally called before `MPI_Wait()` call to simulate communication/computeation overlap. The calculation workload options described below.
-- `sync_allreduce`, `async_allreduce` --  `MPI_Allreduce()` and `MPI_Iallreduce()`/`MPI_Wait()` benchmarks for the whole `MPI_COMM_WORLD` commuicator or splitted subcommunicators, as it is defined by the topology. Pure calculation workload is optionally called before `MPI_Wait()` call.
-- `sync_na2a`, `async_na2a` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the neighbourhood all-to-all collective operation. The topology is simply mapped to `MPI_Dist_graph_create_adjacent()`. The communication itself is implemented with a single `MPI_Neighbor_alltoall()` call for synchronous variant and with `MPI_Ineighbor_alltoall()`/`MPI_Wait()` combination for the asynchronous one. Pure calculation workload is optionally called before `MPI_Wait()` call.
-- `sync_rma_pt2pt`, `async_rma_pt2pt` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the one-sided communication MPI functions. This is simply a one-sided communication version of `sync_pt2pt`/`async_pt2pt` benchmark pair. Implemented with one-sided `MPI_Get()/MPI_Put()` pair in lock/unlock semantics; the `MPI_Rget()`/`MPI_Wait()` is used in an asynchronous variant. Pure calculation workload is optionally called before `MPI_Wait()`.
+The individual benchmarks include:
+- `sync_pt2p2`, `async_pt2pt` -- point-to-point benchmark where each rank exchanges with a predefined number of other ranks. Communications peers are defined by the topology, described below. Synchronous variant utilizes `MPI_Send()`/`MPI_Recv()` function calls. The asynchronous variant uses an equivalent `MPI_Isend()`/`MPI_Irev()`/`MPI_Wait()` combination, and pure calculation workload is optionally called before `MPI_Wait()` call to simulate communication/computation overlap. The calculation workload options are described below.
+- `sync_allreduce`, `async_allreduce` --  `MPI_Allreduce()` and `MPI_Iallreduce()`/`MPI_Wait()` benchmarks for the whole `MPI_COMM_WORLD` communicator or split subcommunicators, as it is defined by the topology. Pure calculation workload is optionally called before `MPI_Wait()` call.
+- `sync_na2a`, `async_na2a` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the neighborhood all-to-all collective operation. The topology is simply mapped to `MPI_Dist_graph_create_adjacent()`. The communication itself is implemented with a single `MPI_Neighbor_alltoall()` call for the synchronous variant and with `MPI_Ineighbor_alltoall()`/`MPI_Wait()` combination for the asynchronous one. Pure calculation workload is optionally called before `MPI_Wait()` call.
+- `sync_rma_pt2pt`, `async_rma_pt2pt` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the one-sided communication MPI functions. This is simply a one-sided communication version of the `sync_pt2pt`/`async_pt2pt` benchmark pair. Implemented with one-sided `MPI_Get()/MPI_Put()` pair in lock/unlock semantics; the `MPI_Rget()`/`MPI_Wait()` is used in an asynchronous variant. Pure calculation workload is optionally called before `MPI_Wait()`.
 
 ## Topology options
 
@@ -38,38 +37,38 @@ For each benchmark one can use a specific set of possible communication topologi
 
 All of the communication topologies from the list below make sense for the benchmarks: `sync_pt2p2`, `async_pt2pt`, `sync_rma_pt2pt`, `async_rma_pt2pt`, `sync_na2a`, `async_na2a`.
 
-- `ping-pong` -- is the topology of pairwise communications. All the ranks in `MPI_COMM_WORLD` are split into pairs, communicating with each other sending the data block back and forth. The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
+- `ping-pong` -- is the topology of pairwise communications. All the ranks in `MPI_COMM_WORLD` are split into pairs, communicating with each other by sending the data block back and forth. The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
 
-    * `stride` -- an integer parameter, that defines the distance between pair elements. For example, `stride=1` means that the closest neghbour for the rank is going to be the counterpart for pairwise for communication; `stride=(MPI_COMM_WORLD size)/2` means that all ranks in `MPI_COMM_WORLD` are seprated into two parts: first half of ranks is going to communicate the second half of ranks, preserving the rank order. The later option is also meant by the specially handled value `stride=0` (it is the defafult one).
+    * `stride` -- an integer parameter, that defines the distance between pair elements. For example, `stride=1` means that the closest neighbor for the rank is going to be the counterpart for pairwise for communication; `stride=(MPI_COMM_WORLD size)/2` means that all ranks in `MPI_COMM_WORLD` are separated into two parts: first half of ranks is going to communicate the second half of ranks, preserving the rank order. The latter option is also meant by the specially handled value `stride=0` (it is the default one).
     * `bidirectional` -- `true`/`false`: defines options for bidirectional or unidirectional kind of pairwise communication (`true` is the default)
 
-- `neighb` -- is the topology of exchange with two, four or more closest neighbour ranks. The difference with pairwise communication pattern, where each rank has always the only one peer for communication, the exchanges in `neighb` topology is arranged for power-of-two number of peers: the closest neighbour ranks that are greater and the closest neighbour ranks that are smaller than the rank in question. The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
+- `neighb` -- is the topology of exchange with two, four, or more closest neighbor ranks. The difference with the pairwise communication pattern, where each rank has always only one peer for communication, the exchanges in the `neighb` topology are arranged for a power-of-two number of peers: the closest neighbor ranks that are greater and the closest neighbor ranks that are smaller than the rank in question. The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
 
-    * `nneighb` -- the number of neighbours on each side to communicate with. For example:
-        - for `nneighb=2` parameter value, the rank with number `N` is going to exchange data with ranks `N-1`, `N-2`, `N+1`, `N+2`. 
-        - for `nneighb=3` parameter value, the rank with number `N` is going to exchange data with ranks `N-1`, `N-2`, `N-3` `N+1`, `N+2`, `N+3`.
+    * `nneighb` -- the number of neighbors on each side to communicate with. For example:
+        - for the `nneighb=2` parameter value, the rank with the number `N` is going to exchange data with ranks `N-1`, `N-2`, `N+1`, `N+2`. 
+        - for the `nneighb=3` parameter value, the rank with the number `N` is going to exchange data with ranks `N-1`, `N-2`, `N-3` `N+1`, `N+2`, `N+3`.
 
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The defaut value for this parameter in `nneighb=1`.
     * `bidirectional` -- has the same meaning as for the `ping-pong` topology.
 
-- `halo` -- is the topology of N-dimentional halo-exchange pattern. The number of peers for communication depends on the number of dimensions. For 1D exchange, the topology appears to be equivalent to `neighb` topology with `nneighb=1`. For 2D, 3D, 4D cases the number of peers is twice the number of dimensions, and the specific set of ranks to communicate is defined by linearization of the N-dimensional topology.  The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
+- `halo` -- is the topology of N-dimentional halo-exchange pattern. The number of peers for communication depends on the number of dimensions. For 1D exchange, the topology appears to be equivalent to the `neighb` topology with `nneighb=1`. For 2D, 3D, and 4D cases the number of peers is twice the number of dimensions, and the specific set of ranks to communicate is defined by linearization of the N-dimensional topology.  The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
 
-    * `ndim` -- the number of dimension in the N-dimensional halo-exchange topology. The default value in `ndim=1`, and the allowed values are: `1, 2, 3, 4`.
+    * `ndim` -- the number of dimensions in the N-dimensional halo-exchange topology. The default value is `ndim=1`, and the allowed values are: `1, 2, 3, 4`.
     * `bidirectional` -- has the same meaning as for the `ping-pong` topology.
 
 ### Collective style topologies
 
-The topogies listed below are meaningful for collective communication benchmarks: `sync_allreduce`, `async_allreduce`.
+The topologies listed below are meaningful for collective communication benchmarks: `sync_allreduce`, `async_allreduce`.
 
-- `split` -- is the way to split the `MPI_COMM_WORLD` communicator into separate groups, so that the collective communication happens within each of those sections independently. The collective communication function that is measured on this rank topology depends on the specific benchmark. The parameters that tune this topology are:
+- `split` -- is the way to split the `MPI_COMM_WORLD` communicator into separate groups so that the collective communication happens within each of those sections independently. The collective communication function that is measured on this rank topology depends on the specific benchmark. The parameters that tune this topology are:
 
     * `nparts` -- an integer that defines the number of groups to split `MPI_COMM_WORLD` into. The default value is `nparts=1`, that is: no splitting, the whole `MPI_COMM_WORLD` is used for collective communication.
-    * `combination` -- `split`/`interleaved`: the way ranks are combined. For `split` option, the sequential ranks form groups; for `interleaved` option, the groups are interleaving. For example:
-        - 8 ranks that are split into 4 groups with `combination=split`. The correspondance of ranks and groups looks like this:\
+    * `combination` -- `split`/`interleaved`: the way ranks are combined. For the `split` option, the sequential ranks form groups; for the `interleaved` option, the groups are interleaving. For example:
+        - 8 ranks that are split into 4 groups with `combination=split`. The correspondence of ranks and groups looks like this:\
           `{ rank=0: group=0; rank=1: group=0; rank=2: group=1; rank=3: group=1; rank=4: group=2; rank=5: group=2; rank=6: group=3; rank=7: group=3 }`. 
-        - the same case but with `combination=interleaved`. The correspondance looks differenly:\
+        - the same case but with `combination=interleaved`. The correspondence looks different :\
           `{ rank=0: group=0; rank=1: group=1; rank=2: group=2; rank=3: group=3; rank=4: group=0; rank=5: group=1; rank=6: group=2; rank=7: group=3 }`.
-    * `nactive` -- an integer parameter, that is applicable only to `combination=interleaved` case. It defines how many of the groups are going to be inactive, that means, simply skipping any communication. This is a useful parameter to define sparse collective communication topologies. For example: 
+    * `nactive` -- an integer parameter, that applies only to the `combination=interleaved` case. It defines how many of the groups are going to be inactive, which means, simply skipping any communication. This is a useful parameter to define sparse collective communication topologies. For example: 
         * for 8 ranks split into 2 groups in the interleaved manner, we can define `nactive=1`, and get the topology:\
           `{ rank=0: group=0; rank=1: IDLE; rank=2: IDLE; rank=3: IDLE; rank=4: group 0; rank=5: IDLE; rank=6: IDLE; rank=7: IDLE }`. 
     
@@ -77,31 +76,31 @@ The topogies listed below are meaningful for collective communication benchmarks
 
 ### Setting up the topology options
 
-The topology and its parameters are defined for each benchmark separately. The command line (or equivalent YAML-file) option is: `-BENCH_params`, where `BENHCH` stands for one of short benchmark names: `pt2pt`, `na2a`, `rma_pt2pt`, `allreduce`. The parameter value for these options are list on definitions in the form: `keyword=value:keyword=value:...`, where keyword is either `topology` to denote the communication topology, or the parameter names for a selected topology. For example:
+The topology and its parameters are defined for each benchmark separately. The command line (or equivalent YAML-file) option is: `-BENCH_params`, where `BENHCH` stands for one of the short benchmark names: `pt2pt`, `na2a`, `rma_pt2pt`, `allreduce`. The parameter values for these options are the list of definitions in the form: `keyword=value:keyword=value:...`, where the keyword is either `topology` to denote the communication topology or the parameter names for a selected topology. For example:
 
 * Option: `-pt2pt_params topology=ping-pong:stride=1:bidirectional=false` sets up the `ping-pong` pairwise topology for both `sync_pt2pt` and `async_pt2pt` benchmarks, and defines the parameters of it
-* Option: `-allreduce_params topology=split:combination=split:nparts=2` sets up the `split` topology for both `sync_allreduce` and `async_allreduce` bechmarks.
+* Option: `-allreduce_params topology=split:combination=split:nparts=2` sets up the `split` topology for both `sync_allreduce` and `async_allreduce` benchmarks.
 
 ## Calculation workload options
 
-The option `-workload_params` controls the background calculation (CPU/GPU load) cycle parameters. The syntax for this option is similar to `-BENCH_params` syntax, i.e. has the form: `keyword=value:keyword=value:...`. The keywords are:
+The option `-workload_params` controls the background calculation (CPU/GPU load) cycle parameters. The syntax for this option is similar to the `-BENCH_params` syntax, i.e. has the form: `keyword=value:keyword=value:...`. The keywords are:
 
-* `cpu_calculations` -- `true`/`false`: to run or not the CPU load cycle in `async` versions of benchmarks. The CPU load cycle is a simplest small `DGEMM` kernel running is a loop. The number of cycles for the loops can be calibrated so that the runtime of the workload cycle could be tuned with 10 usec precision.
-* `gpu_calcullations` -- `true`/`false`: to run on not the CUDA kernel with similar DGEMM calculations that may accompany the CPU cycle. Is meaningful only when CPU load cycle is switched on. The time for this cycle is assumed to be close the CPU load cycle time, but is kept with less precision and can last a little bit more than an expected time. It doesn't require a calibration.
-* `cycles_per_10_usec` -- is a calibration parameter, that must be received by previous calibration run.
-* `omit_calc_over_est` -- `true`/`false`: can be used to omit the calculation slowdown impact estimation. Is useful when calculation slowdown in async comunication modes is not expected, or we explicitly omit this estimation due to low realibility of it on a specific system (due to uncontrolled CPU frequency changes or similar hardware effects).
-* `manual_progress` -- `true`/`false`: in CPU cycle, activate the regular `MPI_Test` function calls to facilitate `manual progress` mode.
+* `cpu_calculations` -- `true`/`false`: to run or not the CPU load cycle in `async` versions of benchmarks. The CPU load cycle is the simplest small `DGEMM` kernel running in a loop. The number of cycles for the loops can be calibrated so that the runtime of the workload cycle can be tuned with 10 usec precision.
+* `gpu_calcullations` -- `true`/`false`: to run on not the CUDA kernel with similar DGEMM calculations that may accompany the CPU cycle. Is meaningful only when the CPU load cycle is switched on. The time for this cycle is assumed to be close to the CPU load cycle time, but is kept with less precision and can last a little bit more than an expected time. It doesn't require a calibration.
+* `cycles_per_10_usec` -- is a calibration parameter, that must be received by a previous calibration run.
+* `omit_calc_over_est` -- `true`/`false`: can be used to omit the calculation slowdown impact estimation. Is useful when calculation slowdown in async communication modes is not expected, or we explicitly omit this estimation due to the low reliability of it on a specific system (due to uncontrolled CPU frequency changes or similar hardware effects).
+* `manual_progress` -- `true`/`false`: in the CPU cycle, activate the regular `MPI_Test` function calls to facilitate `manual progress` mode.
 * `spin_period` -- in usecs, set the `spin period`, i.e. time distance between sequential `MPI_Test` calls for `manual progress` mode.
 
 ## CPU load loop calibration
 
-To precisely estimate the calculation slowdown effects of asynchronios communication progress actions, we need the CPU load cycle calibration to be made in advance. That means, in a "clean" mode, without any artificial progress measures, we have to run the special pseudo-benchmark named `calc_calibration`. This can be made only once for each system we plan to make measurements, but we must make sure the results of calibration are reliable. Please note, that for many modern HPC systems the CPU load calibration and calculation slowdown measurement is tricky since they utilize some forms of dynamic CPU clock control. Only with these options switched off one can get any reliable results from this form of benchmarking!
+To precisely estimate the calculation slowdown effects of asynchronous communication progress actions, we need the CPU load cycle calibration to be made in advance. That means, in a "clean" mode, without any artificial progress measures, we have to run the special pseudo-benchmark named `calc_calibration`. This can be made only once for each system we plan to make measurements, but we must make sure the results of calibration are reliable. Please note, that for many modern HPC systems, the CPU load calibration and calculation slowdown measurement is tricky since they utilize some forms of dynamic CPU clock control. Only with these options switched off one can get any reliable results from this form of benchmarking!
 
 The calibration is done like this:
 
 `IMB-ASYNC calc_calibration`
 
-In a successfull case, this execution will report the calibration integer constant `cycles_per_10usec`, that must be remebered and put in the `-workload_params` during the actual benchmarking.
+In a successful case, this execution will report the calibration integer constant `cycles_per_10usec`, which must be remembered and put in the `-workload_params` during the actual benchmarking.
 
 ## Copyright and Licenses
 
