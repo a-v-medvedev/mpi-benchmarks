@@ -1,9 +1,11 @@
-# IMB-ASYNC Benchmark (based on: Intel(R) MPI Benchmarks 2019)
+# IMB-ASYNC Benchmark 
+**based on: Intel(R) MPI Benchmarks 2019**
+
 [![3-Clause BSD License](https://img.shields.io/badge/License-BSD_3--Clause-green.svg)](license/license.txt)
 
 ## Introduction
 
-The IMB-ASYNC benchmark suite is a collection of microbenchmark tools that help to fairly estimate the MPI asynchronous progress performance (computation-communication overlap) in many useful scenarios.
+The `IMB-ASYNC` benchmark suite is a collection of microbenchmark tools that help to fairly estimate the MPI asynchronous progress performance (computation-communication overlap) in many useful scenarios.
 
 ## Citation
 
@@ -21,17 +23,24 @@ Please make a citation of this paper if you use this benchmark code in research.
 
 The benchmark requires two small libraries for command line and config parsing. The download-and-build script for these libraries is placed in the `src/ASYNC/thirdparty` directory. It must download, build, and install the resulting files in the right place. The benchmark build code will link these libraries statically into the resulting benchmark binary.
 
+So benchmark build is a two-step process:
+
+- `cd src/ASYNC/thrirdparty; ./download-and-build.sh`
+- `make CXX=<mpi-c++-wrapper> [WITH_CUDA=TRUE]`
+
+Here the `<mpi-c++-wrapper>` denotes the actual MPI wrapper for C++ compiler. The default value for `CXX` is `mpicxx`.
+
 ## Benchmark groups
 
 The individual benchmarks include:
-- `sync_pt2p2`, `async_pt2pt` -- point-to-point benchmark where each rank exchanges with a predefined number of other ranks. Communications peers are defined by the topology, described below. Synchronous variant utilizes `MPI_Send()`/`MPI_Recv()` function calls. The asynchronous variant uses an equivalent `MPI_Isend()`/`MPI_Irev()`/`MPI_Wait()` combination, and pure calculation workload is optionally called before `MPI_Wait()` call to simulate communication/computation overlap. The calculation workload options are described below.
-- `sync_allreduce`, `async_allreduce` --  `MPI_Allreduce()` and `MPI_Iallreduce()`/`MPI_Wait()` benchmarks for the whole `MPI_COMM_WORLD` communicator or split subcommunicators, as it is defined by the topology. Pure calculation workload is optionally called before `MPI_Wait()` call.
-- `sync_na2a`, `async_na2a` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the neighborhood all-to-all collective operation. The topology is simply mapped to `MPI_Dist_graph_create_adjacent()`. The communication itself is implemented with a single `MPI_Neighbor_alltoall()` call for the synchronous variant and with `MPI_Ineighbor_alltoall()`/`MPI_Wait()` combination for the asynchronous one. Pure calculation workload is optionally called before `MPI_Wait()` call.
-- `sync_rma_pt2pt`, `async_rma_pt2pt` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the one-sided communication MPI functions. This is simply a one-sided communication version of the `sync_pt2pt`/`async_pt2pt` benchmark pair. Implemented with one-sided `MPI_Get()/MPI_Put()` pair in lock/unlock semantics; the `MPI_Rget()`/`MPI_Wait()` is used in an asynchronous variant. Pure calculation workload is optionally called before `MPI_Wait()`.
+- `sync_pt2p2`, `async_pt2pt` -- point-to-point benchmark where each rank exchanges with a predefined set of other ranks. Communications peers are defined by the topology, described [below](#topology-options). Synchronous variant utilizes `MPI_Send()`/`MPI_Recv()` function calls. The asynchronous variant uses an equivalent `MPI_Isend()`/`MPI_Irev()`/`MPI_Wait()` combination, and CPU/GPU calculation workload is optionally called before `MPI_Wait()` call to simulate communication/computation overlap. The calculation workload options are described [below](#calculation-workload-options).
+- `sync_allreduce`, `async_allreduce` --  `MPI_Allreduce()` and `MPI_Iallreduce()`/`MPI_Wait()` benchmarks for the whole `MPI_COMM_WORLD` communicator or split subcommunicators, as it is defined by the topology. Calculation workload is optionally called before `MPI_Wait()` call.
+- `sync_na2a`, `async_na2a` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the neighborhood all-to-all collective operation. The topology is simply mapped to `MPI_Dist_graph_create_adjacent()`. The communication itself is implemented with a single `MPI_Neighbor_alltoall()` call for the synchronous variant and with `MPI_Ineighbor_alltoall()`/`MPI_Wait()` combination for the asynchronous one. Calculation workload is optionally called before `MPI_Wait()` call.
+- `sync_rma_pt2pt`, `async_rma_pt2pt` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the one-sided communication MPI functions. This is simply a one-sided communication version of the `sync_pt2pt`/`async_pt2pt` benchmark pair. Implemented with one-sided `MPI_Get()/MPI_Put()` pair in lock/unlock semantics; the `MPI_Rget()`/`MPI_Wait()` is used in an asynchronous variant. Calculation workload is optionally called before `MPI_Wait()`.
 
 ## Topology options
 
-For each benchmark one can use a specific set of possible communication topologies -- the ones that make sense for a particular benchmark. In fact, the current set of benchmarks is virtually divided into two parts: one implying point-to-point communication patterns, and another one implying collective communication patterns.
+For each benchmark one can choose a topology from a set. There is a specific set of possible communication topologies -- the ones that make sense for a particular benchmark. In fact, the current set of benchmarks is virtually divided into two parts: one implying point-to-point communication patterns, and another one implying collective communication patterns.
 
 ### Point-to-point style topologies
 
@@ -76,7 +85,7 @@ The topologies listed below are meaningful for collective communication benchmar
 
 ### Setting up the topology options
 
-The topology and its parameters are defined for each benchmark separately. The command line (or equivalent YAML-file) option is: `-BENCH_params`, where `BENHCH` stands for one of the short benchmark names: `pt2pt`, `na2a`, `rma_pt2pt`, `allreduce`. The parameter values for these options are the list of definitions in the form: `keyword=value:keyword=value:...`, where the keyword is either `topology` to denote the communication topology or the parameter names for a selected topology. For example:
+The topology and its parameters are defined for each benchmark separately. The command line (or equivalent YAML-file) option is: `-BENCH_params`, where `BENCH` stands for one of the short benchmark names: `pt2pt`, `na2a`, `rma_pt2pt`, `allreduce`. The parameter values for these options are the list of definitions in the form: `keyword=value:keyword=value:...`, where the keyword is either `topology` to denote the communication topology or the parameter names for a selected topology. For example:
 
 * Option: `-pt2pt_params topology=ping-pong:stride=1:bidirectional=false` sets up the `ping-pong` pairwise topology for both `sync_pt2pt` and `async_pt2pt` benchmarks, and defines the parameters of it
 * Option: `-allreduce_params topology=split:combination=split:nparts=2` sets up the `split` topology for both `sync_allreduce` and `async_allreduce` benchmarks.
@@ -101,6 +110,34 @@ The calibration is done like this:
 `IMB-ASYNC calc_calibration`
 
 In a successful case, this execution will report the calibration integer constant `cycles_per_10usec`, which must be remembered and put in the `-workload_params` during the actual benchmarking.
+
+## Other options
+
+There is a set of options controlling the config file reading, general benchmarking parameters and some other high-level aspects. Please refer the list below for the short description.
+
+* `-dump config.yaml` -- create a config file based on the set of command line options that are given. This helps to make a yaml-config file to simplify future use of similar benchmarking scenarios
+* `-load config.yaml` -- load a config file. Additional command line options can override those given in the config file
+* `-output output.yaml` -- write out the structured YAML file with the benchmarking results at the end of the execution
+* `-list` -- show a list of available benchmarks in the suite
+* `-thread_level single|funneled|serialized|multiple|nompinit` -- controls the way `MPI_Init()` is called
+* `-input filename` -- instructs IMB-ASYNC to read the list of benchmark to run from a text file. One becnhmark name per line
+* `-include benchmark[,benchmark,[...]` -- add the listed benchmarks to the execution set
+* `-exclude benchmark[,benchmark,[...]` -- remove the listed benchmarks from the execution set
+* `-len INT,INT,...` -- list of message sizes to execute (multiply this size to a datatype sizeof() to get the message size in bytes
+* `-datatype double|float|int|char` -- the MPI datatype that is used in all MPI exchange calls
+* `-ncycles INT` -- the number of benchmark cycles
+* `-nwarmup INT` -- the number of warmup cycles [default: 0]]
+* `-calctime INT,INT,...` -- for each message size from `-len` option, set the calculation workload runtime in usecs.
+
+## GPU aware mode
+
+There is a mode in `IMB-ASYNC` suite which implies MPI operations over GPU memory. Only CUDA interface is implemented. To switch on this mode, one must rebuild the benchmark adding `WITH_CUDA=TRUE` command line argument to make.
+
+(*FIXME* Additional options to be described...)
+
+## Extending the suite and adding custom benchmarks
+
+The `IMB-ASYNC` suite is designed to be extensible. One may add his own benchmarks and even new suites to the benchmarking engine. You can get the idea on how to do this by referring the special Intel(R) MPI Benchmark documentation [section](https://www.intel.com/content/www/us/en/developer/articles/technical/creating-custom-benchmarks-for-imb-2019.html). The `src/example` subdirectory contains the source code, described in this documentation piece.
 
 ## Copyright and Licenses
 
