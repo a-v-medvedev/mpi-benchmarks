@@ -41,6 +41,9 @@ IMB-ASYNC:
 	make -C src -f Makefile TARGET=ASYNC
 	@cp src/IMB-ASYNC .
 
+example: 
+	make -C src -f Makefile TARGET=example
+	@cp src/IMB-example .
 
 clean:
 	make -C src -f Makefile TARGET=ASYNC clean
