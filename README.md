@@ -40,7 +40,7 @@ The individual benchmarks include:
 
 ## Topology options
 
-For each benchmark one can choose a topology from a set. There is a specific set of possible communication topologies -- the ones that make sense for a particular benchmark. In fact, the current set of benchmarks is virtually divided into two parts: one implying point-to-point communication patterns, and another one implying collective communication patterns.
+For each benchmark one can choose a topology (or a type of communication pattern) from a set. With command line options, one can chose the topology that makes sense for a particular benchmark. In fact, the current set of benchmarks is virtually divided into two parts: one implying point-to-point communication patterns (topologies), and another one implying collective communication patterns (topologies).
 
 ### Point-to-point style topologies
 
@@ -51,11 +51,11 @@ All of the communication topologies from the list below make sense for the bench
     * `stride` -- an integer parameter, that defines the distance between pair elements. For example, `stride=1` means that the closest neighbor for the rank is going to be the counterpart for pairwise for communication; `stride=(MPI_COMM_WORLD size)/2` means that all ranks in `MPI_COMM_WORLD` are separated into two parts: first half of ranks is going to communicate the second half of ranks, preserving the rank order. The latter option is also meant by the specially handled value `stride=0` (it is the default one).
     * `bidirectional` -- `true`/`false`: defines options for bidirectional or unidirectional kind of pairwise communication (`true` is the default)
 
-- `neighb` -- is the topology of exchange with two, four, or more closest neighbor ranks. The difference with the pairwise communication pattern, where each rank has always only one peer for communication, the exchanges in the `neighb` topology are arranged for a power-of-two number of peers: the closest neighbor ranks that are greater and the closest neighbor ranks that are smaller than the rank in question. The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
+- `neighb` -- is the topology of exchange with two, four, or more closest neighbor ranks. The difference with the pairwise communication pattern, where each rank has always only one peer for communication, the exchanges in the `neighb` topology are arranged for even number of peers: the closest `N` neighbors that have greater rank numbers and smaller rank numbers than the rank in question make it a total `2*N` peers. The MPI functions that are used for this purpose depend on the specific benchmark. The parameters that tune this topology are:
 
     * `nneighb` -- the number of neighbors on each side to communicate with. For example:
-        - for the `nneighb=2` parameter value, the rank with the number `N` is going to exchange data with ranks `N-1`, `N-2`, `N+1`, `N+2`. 
-        - for the `nneighb=3` parameter value, the rank with the number `N` is going to exchange data with ranks `N-1`, `N-2`, `N-3` `N+1`, `N+2`, `N+3`.
+        - for the `nneighb=2` parameter value, the rank with the number `N` is going to exchange data with ranks `N-1`, `N-2`, `N+1`, `N+2` (4 peers). 
+        - for the `nneighb=3` parameter value, the rank with the number `N` is going to exchange data with ranks `N-1`, `N-2`, `N-3` `N+1`, `N+2`, `N+3` (6 peers).
 
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The defaut value for this parameter in `nneighb=1`.
     * `bidirectional` -- has the same meaning as for the `ping-pong` topology.
@@ -78,7 +78,7 @@ The topologies listed below are meaningful for collective communication benchmar
         - the same case but with `combination=interleaved`. The correspondence looks different :\
           `{ rank=0: group=0; rank=1: group=1; rank=2: group=2; rank=3: group=3; rank=4: group=0; rank=5: group=1; rank=6: group=2; rank=7: group=3 }`.
     * `nactive` -- an integer parameter, that applies only to the `combination=interleaved` case. It defines how many of the groups are going to be inactive, which means, simply skipping any communication. This is a useful parameter to define sparse collective communication topologies. For example: 
-        * for 8 ranks split into 2 groups in the interleaved manner, we can define `nactive=1`, and get the topology:\
+        * for 8 ranks split into 4 groups in the interleaved manner, we can define `nactive=1`, and get the topology:\
           `{ rank=0: group=0; rank=1: IDLE; rank=2: IDLE; rank=3: IDLE; rank=4: group 0; rank=5: IDLE; rank=6: IDLE; rank=7: IDLE }`. 
     
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The default value is `nactive=nparts`.
