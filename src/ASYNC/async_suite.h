@@ -308,6 +308,7 @@ namespace async_suite {
         HANDLE_PARAMETER(std::vector<int>, calctime);
         HANDLE_PARAMETER(MPI_Datatype, datatype);
         HANDLE_PARAMETER(YAML::Emitter, yaml_out);
+        HANDLE_PARAMETER(std::string, yaml_outfile);
         HANDLE_PARAMETER(std::vector<int>, ncycles);
         HANDLE_PARAMETER(int, nwarmup);
         HANDLE_PARAMETER(params::dictionary<params::benchmarks_params>, p);

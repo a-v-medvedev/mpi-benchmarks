@@ -43,20 +43,36 @@ struct YamlOutputMaker {
 	std::string block;
 	YamlOutputMaker(const std::string &_block) : block(_block) {}
 	std::map<const std::string, double> kv;
+	std::map<const std::string, std::vector<double>> kv_vec;
+	std::map<const std::string, std::string> kv_str;
+	void add(const std::string &key, const std::string &value) { kv_str[key] = value; }
 	void add(const std::string &key, double value) { kv[key] = value; }
 	void add(int key, double value) { add(std::to_string(key), value); }
+    void add(const std::string &key, const std::vector<double> &values) { kv_vec[key] = values; }
+	void add(int key, const std::vector<double> &values) { add(std::to_string(key), values); }
 	void make_output(YAML::Emitter &yaml_out) const {
 		yaml_out << YAML::Key << block << YAML::Value;
 		yaml_out << YAML::Flow << YAML::BeginMap;
 		for (auto &item : kv) {
 			yaml_out << YAML::Key << YAML::Flow << item.first << YAML::Value << item.second;
 		}
+        for (auto &item : kv_str) {
+			yaml_out << YAML::Key << YAML::Flow << item.first << YAML::Value << item.second;
+		}
+        for (auto &item : kv_vec) {
+			yaml_out << YAML::Key << YAML::Flow << item.first << YAML::Value;
+            yaml_out << YAML::BeginSeq;
+            for (auto &elem : item.second) {
+                yaml_out << elem;
+            }
+            yaml_out << YAML::EndSeq;
+		}
 		yaml_out << YAML::Flow << YAML::EndMap;
 	}
 };
 
 static void WriteOutYaml(YAML::Emitter &yaml_out, const std::string &bname,
-						const std::vector<YamlOutputMaker> &makers) {
+						 const std::vector<YamlOutputMaker> &makers) {
 	yaml_out << YAML::Key << YAML::Flow << bname << YAML::Value;
 	yaml_out << YAML::Flow << YAML::BeginMap;
 	for (auto &m : makers) {

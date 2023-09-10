@@ -135,6 +135,63 @@ There is a mode in `IMB-ASYNC` suite which implies MPI operations over GPU memor
 
 (*FIXME* Additional options to be described...)
 
+## Output YAML structure
+
+The output YAML file is written out when the `-output` command line option is set. The file contains some collection of data for each benchmark that was executed. The structure can be outlined as follows:
+
+```
+<BENCH_NAME>:
+    {tagv,tmin,tmax,over_full,over_comm,over_calc}:
+        <message_len1>: <value_in_seconds>
+        <message_len2>: <value_in_seconds>
+        ...
+        <message_lenN>: <value_in_seconds>
+    topo:
+        np: <NP>
+        name: <TOPOLOGY_NAME>
+        <rank0>: [ rank_to_comm1, rank_to_comm2, ..., rank_to_commN ]
+        <rank1>: [ rank_to_comm1, rank_to_comm2, ..., rank_to_commN ]
+        ...
+        <rankN>: [ rank_to_comm1, rank_to_comm2, ..., rank_to_commN ]
+<BENCH_NAME>:
+    ...
+```
+
+In the `tagv`, `tmin`, `tmax`, `over_full`, `over_comm`, `over_calc` lists, for each tested messsage length, the values in seconds of the corresponding value is given. The `topo` list shows the name and the world communicator size for the topology that was used. For each rank the peers are enumerated for each communication event. That means, for point-to-point style of topology, "send" and "receive" communication events are enumerated separetely, and they all will be duplicated if the bidirectional type if communications is seleted.
+
+For example, the benchmark line:
+
+```
+mpirun -np 4 ./IMB-ASYNC sync_pt2pt -pt2pt_params topology=halo:ndim=2 -len 4 -output out.yaml
+```
+
+produces the output YAML similar to:
+
+```
+sync_pt2pt: 
+    tavg: 
+        4: 2.4306409999999997e-06 
+    tmin: 
+        4: 2.289561e-06 
+    tmax: 
+        4: 2.4306780000000001e-06 
+    over_full: 
+        4: 0 
+    over_comm: 
+        4: 0 
+    over_calc: 
+        4: 0 
+    topo:
+        np: 4
+        name: halo 
+        0: [2, 2, 1, 1, 2, 2, 1, 1] 
+        1: [3, 3, 0, 0, 3, 3, 0, 0] 
+        2: [0, 0, 3, 3, 0, 0, 3, 3] 
+        3: [1, 1, 2, 2, 1, 1, 2, 2]
+```
+
+
+
 ## Extending the suite and adding custom benchmarks
 
 The `IMB-ASYNC` suite is designed to be extensible. One may add his own benchmarks and even new suites to the benchmarking engine. You can get the idea on how to do this by referring the special Intel(R) MPI Benchmark documentation [section](https://www.intel.com/content/www/us/en/developer/articles/technical/creating-custom-benchmarks-for-imb-2019.html). The `src/example` subdirectory contains the source code, described in this documentation piece.

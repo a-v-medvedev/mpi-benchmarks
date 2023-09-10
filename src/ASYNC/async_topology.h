@@ -53,19 +53,17 @@ struct peer_t {
 using actions_t = std::vector<peer_t>;
 
 struct topohelper {
+    const params::list<params::benchmarks_params> &pl;
     int np, rank;
     bool active, bidirectional;
-
-    topohelper(int np_, int rank_) : np(np_), rank(rank_) {}
-
-    static std::shared_ptr<topohelper> create(const params::list<params::benchmarks_params> &pl, 
+    topohelper(const params::list<params::benchmarks_params> &pl_, int np_, int rank_) : pl(pl_), np(np_), rank(rank_) {}
+    static std::shared_ptr<topohelper> create(const params::list<params::benchmarks_params> &pl_, 
                                               int np_, int rank_);
+    std::shared_ptr<topohelper> clone(int rank_) { return create(pl, np, rank_); }
+    std::string name() { return pl.get_string("topology"); }
 	virtual bool is_active() = 0;
-
 	virtual bool is_even() { return true; }
-
     virtual int get_group() { return 0; }
-
     std::vector<int> ranks_for_action(action_t action) {
         auto c = comm_actions();
         std::vector<int> result;
@@ -78,15 +76,12 @@ struct topohelper {
         return result;
 
     }
-
     virtual std::vector<int> ranks_to_send_to() {
         return ranks_for_action(action_t::SEND);
 	}
-
     virtual std::vector<int> ranks_to_recv_from() {
         return ranks_for_action(action_t::RECV);
 	}
-
     virtual actions_t comm_actions() = 0;
     virtual size_t get_num_actions() = 0;
 };
@@ -103,20 +98,15 @@ struct topo_pingpong : public topohelper {
             return false;
         return true;
     }
-
-	topo_pingpong(const params::list<params::benchmarks_params> &pl, int np_, int rank_) : 
-                                                                            topohelper(np_, rank_) {
+	topo_pingpong(const params::list<params::benchmarks_params> &pl_, int np_, int rank_) : 
+                                                                            topohelper(pl_, np_, rank_) {
 		stride = pl.get_int("stride");
 		bidirectional = pl.get_bool("bidirectional");
 		active = set_stride();
     }
-
 	virtual bool is_active() override { return active; }
-
 	virtual bool is_even() override { return group % 2; }
-
     virtual int get_group() { return group; }
-
     virtual actions_t comm_actions() override {
         actions_t result;
         if (is_even()) {
@@ -130,11 +120,9 @@ struct topo_pingpong : public topohelper {
         }
         return result;
     }
-
     virtual size_t get_num_actions() override {
         return ranks_to_send_to().size() + ranks_to_recv_from().size();
     }
-
     protected:
 	int prev() {
 			int distance = stride % np;
@@ -143,7 +131,6 @@ struct topo_pingpong : public topohelper {
 					p += np;
 			return p;
 	}
-
 	int next() {
 			int distance = stride % np;
 			int n = rank + distance;
@@ -156,7 +143,6 @@ struct topo_pingpong : public topohelper {
 struct topo_split : public topohelper {
     int nparts, active_parts;
     int group;
-
     bool handle_split() {
         group = rank % nparts;
         int rest = np % nparts;
@@ -165,25 +151,21 @@ struct topo_split : public topohelper {
         }
         return true;
     }
-
-    topo_split(const params::list<params::benchmarks_params> &pl, int np_, int rank_) :
-                                                                  topohelper(np_, rank_) {
+    topo_split(const params::list<params::benchmarks_params> &pl_, int np_, int rank_) :
+                                                                  topohelper(pl_, np_, rank_) {
         nparts = pl.get_int("nparts");
-        active_parts = pl.get_int("active_parts");
+        active_parts = pl.get_int("nactive");
         if (!active_parts) {
             active_parts = nparts;
         }
         active = handle_split();
     }
-
 	virtual bool is_active() override { 
         return active; 
     }
-
     virtual int get_group() { 
         return group; 
     }
-    
     virtual std::vector<int> ranks_to_send_to() override {
         std::vector<int> result; 
         for (int n = group; n < np / nparts; n++) {
@@ -192,11 +174,9 @@ struct topo_split : public topohelper {
         }
         return result;
     }
-
     virtual std::vector<int> ranks_to_recv_from() override { 
         return ranks_to_send_to(); 
     }
-
     virtual actions_t comm_actions() override {
         actions_t result;
         for (auto r : ranks_to_recv_from()) {
@@ -205,7 +185,6 @@ struct topo_split : public topohelper {
         }
         return result;
     }
-
     size_t get_num_actions() override { 
         return comm_actions().size(); 
     }
@@ -213,16 +192,13 @@ struct topo_split : public topohelper {
 
 struct topo_neighb : public topohelper {
     int nneighb;
-	topo_neighb(const params::list<params::benchmarks_params> &pl, int np_, int rank_) : topohelper(np_, rank_) {
+	topo_neighb(const params::list<params::benchmarks_params> &pl_, int np_, int rank_) : topohelper(pl_, np_, rank_) {
 		nneighb = pl.get_int("nneighb");
 		bidirectional = pl.get_bool("bidirectional");
         active = (np > nneighb);
     }
-
     virtual bool is_even() { return rank % 2; }
-
 	virtual bool is_active() override { return active; }
-
     virtual actions_t comm_actions() override {
         actions_t result;
         if (is_even()) {
@@ -246,11 +222,9 @@ struct topo_neighb : public topohelper {
         }
         return result;
     }
-
     virtual size_t get_num_actions() override {
         return comm_actions().size();
     }
-
     int prev(int i) {
 		int distance = (i + 1) % np;
 		int p = rank - distance;
@@ -258,7 +232,6 @@ struct topo_neighb : public topohelper {
 			p += np;
 		return p;
 	}
-
 	int next(int i) {
 		int distance = (i + 1) % np;
 		int n = rank + distance;
@@ -270,16 +243,14 @@ struct topo_neighb : public topohelper {
 
 struct topo_halo : public topohelper {
     int ndims;
-	topo_halo(const params::list<params::benchmarks_params> &pl, int np_, int rank_) : topohelper(np_, rank_) {
+	topo_halo(const params::list<params::benchmarks_params> &pl_, int np_, int rank_) : topohelper(pl_, np_, rank_) {
 		ndims = pl.get_int("ndim");
 		bidirectional = pl.get_bool("bidirectional");
 		init();
     }
-
     std::vector<unsigned int> mults;
     std::vector<unsigned int> ranksperdim;
     int required_nranks;
-
     template <typename integer>
     integer gcd(integer a, integer b) {
         if (a < 0) a = -a;
@@ -292,7 +263,6 @@ struct topo_halo : public topohelper {
         }
         return a;
     }
-
     void init() {
 		std::vector<unsigned int> topo;
 		topo.resize(ndims, 1);
@@ -323,9 +293,7 @@ struct topo_halo : public topohelper {
         for (int i = ndims - 2; i >= 0; --i)
             mults[i] = mults[i + 1] * ranksperdim[i + 1];
     }
-
     bool is_active() { return rank < required_nranks; }
-
     virtual actions_t comm_actions() override {
         actions_t peers;
         peers.resize(ndims * (bidirectional ? 2 : 1));
@@ -339,7 +307,6 @@ struct topo_halo : public topohelper {
                 flag = !flag;
             }
         }
-        
         // construct the partners
         for (int dim = 0, p = 0; dim < ndims; ++dim) {
             std::vector<unsigned int> peerssubs = mysubs;
@@ -369,11 +336,9 @@ struct topo_halo : public topohelper {
         }
         return peers;
     }
-
     virtual size_t get_num_actions() override {
         return comm_actions().size();
     }
-
     // linearize
     int substorank(const std::vector<unsigned int> &subs) {
         int rank = 0;
@@ -382,7 +347,6 @@ struct topo_halo : public topohelper {
             rank += mults[i] * subs[i];
         return rank;
     }
-
     // delinearize
     std::vector<unsigned int> ranktosubs(int rank) {
         std::vector<unsigned int> subs;
@@ -396,16 +360,16 @@ struct topo_halo : public topohelper {
     }
 };
 
-std::shared_ptr<topohelper> topohelper::create(const params::list<params::benchmarks_params> &pl,
+std::shared_ptr<topohelper> topohelper::create(const params::list<params::benchmarks_params> &pl_,
                                                int np_, int rank_) {
-    if (pl.get_string("topology") == "ping-pong") {
-        return std::make_shared<topo_pingpong>(pl, np_, rank_);
-    } else if (pl.get_string("topology") == "split") {
-        return std::make_shared<topo_split>(pl, np_, rank_);
-    } else if (pl.get_string("topology") == "neighb") {
-        return std::make_shared<topo_neighb>(pl, np_, rank_);
-	} else if (pl.get_string("topology") == "halo") {
-        return std::make_shared<topo_halo>(pl, np_, rank_);
+    if (pl_.get_string("topology") == "ping-pong") {
+        return std::make_shared<topo_pingpong>(pl_, np_, rank_);
+    } else if (pl_.get_string("topology") == "split") {
+        return std::make_shared<topo_split>(pl_, np_, rank_);
+    } else if (pl_.get_string("topology") == "neighb") {
+        return std::make_shared<topo_neighb>(pl_, np_, rank_);
+	} else if (pl_.get_string("topology") == "halo") {
+        return std::make_shared<topo_halo>(pl_, np_, rank_);
 	}
     throw std::runtime_error("topohelper: not supported topology in creator");
 }

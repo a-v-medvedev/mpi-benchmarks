@@ -167,6 +167,20 @@ namespace async_suite {
                        MPI_COMM_WORLD, &win);
     }
 
+    void AsyncBenchmark_allreduce::init() {
+        GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
+        AsyncBenchmark::init();
+        topo = topohelper::create(p.get("allreduce"), np, rank);
+    }
+
+    void AsyncBenchmark_iallreduce::init() {
+        GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
+        AsyncBenchmark::init();
+        calc.init();
+        topo = topohelper::create(p.get("allreduce"), np, rank);
+    }
+
+
     char *AsyncBenchmark::get_sbuf() { 
         if (!is_cuda_aware) {
             return host_sbuf;
@@ -236,6 +250,7 @@ namespace async_suite {
 
     void AsyncBenchmark::finalize() { 
         GET_PARAMETER(YAML::Emitter, yaml_out);
+        GET_PARAMETER(std::string, yaml_outfile);
         YamlOutputMaker yaml_tmin("tmin");
         YamlOutputMaker yaml_tmax("tmax");
         YamlOutputMaker yaml_tavg("tavg");
@@ -277,8 +292,19 @@ namespace async_suite {
                 }
             }
         }
-        yaml_topo.add("np", np);
-        WriteOutYaml(yaml_out, get_name(), {yaml_tavg, yaml_tmin, yaml_tmax, yaml_over_full, yaml_over_comm, yaml_over_calc, yaml_topo});
+        if (!yaml_outfile.empty()) {
+            yaml_topo.add("name", topo->name());
+            yaml_topo.add("np", np);
+            for (int n = 0; n < np; n++) {
+                auto per_rank_topo = topo->clone(n);
+                std::vector<double> ranks;
+                for (auto &action : per_rank_topo->comm_actions()) {
+                    ranks.push_back(action.rank);
+                }
+                yaml_topo.add(n, ranks);
+            } 
+            WriteOutYaml(yaml_out, get_name(), {yaml_tavg, yaml_tmin, yaml_tmax, yaml_over_full, yaml_over_comm, yaml_over_calc, yaml_topo});
+        }
 
         // NOTE: can't free pinned memory in destructor, CUDA runtime complains
         // that it's too late
@@ -419,11 +445,6 @@ namespace async_suite {
         MPI_Barrier(MPI_COMM_WORLD);
         results[count] = result { true, time, 0, 0, ncycles };
         return true;
-    }
-
-    void AsyncBenchmark_iallreduce::init() {
-        AsyncBenchmark::init();
-        calc.init();
     }
 
     bool AsyncBenchmark_iallreduce::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
@@ -971,8 +992,8 @@ namespace async_suite {
 
     void AsyncBenchmark_calibration::finalize() {
         GET_PARAMETER(YAML::Emitter, yaml_out);
-
-        YamlOutputMaker yaml_affinity("affinity");
+        GET_PARAMETER(std::string, yaml_outfile);
+        
         int isset = 0, ncores = 0, nthreads = 0;
         int local_isset = 0, local_ncores = 0, local_nthreads = 0;
         local_isset = (int)sys::threadaffinityisset(local_nthreads);
@@ -986,17 +1007,20 @@ namespace async_suite {
         isset = (isregular(local_isset, isset, np) ? isset : -1);
         ncores = (isregular(local_ncores, ncores, np) ? ncores : -1);
         nthreads = (isregular(local_nthreads, nthreads, np) ? nthreads : -1);
-        yaml_affinity.add("isset", isset);
-        yaml_affinity.add("ncores", ncores);
-        yaml_affinity.add("nthreads", nthreads);
-        
-        YamlOutputMaker yaml_calibration("calibration");
-        yaml_calibration.add("avg", calc.cycles_per_10usec_avg); 
-        yaml_calibration.add("min", calc.cycles_per_10usec_min); 
-        yaml_calibration.add("max", calc.cycles_per_10usec_max); 
-        yaml_calibration.add("irregularity", calc.irregularity_level); 
+        if (!yaml_outfile.empty()) {
+            YamlOutputMaker yaml_affinity("affinity");
+            yaml_affinity.add("isset", isset);
+            yaml_affinity.add("ncores", ncores);
+            yaml_affinity.add("nthreads", nthreads);
+            
+            YamlOutputMaker yaml_calibration("calibration");
+            yaml_calibration.add("avg", calc.cycles_per_10usec_avg); 
+            yaml_calibration.add("min", calc.cycles_per_10usec_min); 
+            yaml_calibration.add("max", calc.cycles_per_10usec_max); 
+            yaml_calibration.add("irregularity", calc.irregularity_level); 
 
-        WriteOutYaml(yaml_out, get_name(), {yaml_affinity, yaml_calibration});
+            WriteOutYaml(yaml_out, get_name(), {yaml_affinity, yaml_calibration});
+        }
     }
 
 
