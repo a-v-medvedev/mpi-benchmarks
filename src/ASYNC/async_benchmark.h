@@ -150,6 +150,7 @@ namespace async_suite {
 
     class AsyncBenchmark_allreduce : public AsyncBenchmark {
         public:
+        MPI_Comm coll_comm;
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         DEFINE_INHERITED(AsyncBenchmark_allreduce, BenchmarkSuite<BS_GENERIC>);
@@ -157,6 +158,7 @@ namespace async_suite {
 
     class AsyncBenchmark_iallreduce : public AsyncBenchmark {
         public:
+        MPI_Comm coll_comm;
         AsyncBenchmark_calc calc;
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;

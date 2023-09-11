@@ -42,7 +42,7 @@
 #include <memory>
 
 enum action_t {
-    SEND = 0, RECV = 1
+    SEND = 0, RECV = 1, COLL = 2
 };
 
 struct peer_t {
@@ -141,18 +141,32 @@ struct topo_pingpong : public topohelper {
 };
 
 struct topo_split : public topohelper {
+    bool interleaved;
     int nparts, active_parts;
     int group;
+    std::vector<int> peers;
+    int rank2group(int r) { return interleaved ? r % nparts : r / nparts; }
     bool handle_split() {
-        group = rank % nparts;
+        group = rank2group(rank);
+        if (group > active_parts - 1) {
+            return false;
+        }
         int rest = np % nparts;
         if (rank >= np - rest) {
             return false;
         }
+        for (int n = 0; n < np - rest; n++) {
+            if (n == rank)
+                continue;
+            int g = rank2group(n);
+            if (g == group)
+                peers.push_back(n);
+        } 
         return true;
     }
     topo_split(const params::list<params::benchmarks_params> &pl_, int np_, int rank_) :
                                                                   topohelper(pl_, np_, rank_) {
+        interleaved = (pl.get_string("combination") == "interleaved");                                                                       
         nparts = pl.get_int("nparts");
         active_parts = pl.get_int("nactive");
         if (!active_parts) {
@@ -167,21 +181,15 @@ struct topo_split : public topohelper {
         return group; 
     }
     virtual std::vector<int> ranks_to_send_to() override {
-        std::vector<int> result; 
-        for (int n = group; n < np / nparts; n++) {
-            if (n != rank)
-                result.push_back(n);
-        }
-        return result;
+        return peers;
     }
     virtual std::vector<int> ranks_to_recv_from() override { 
-        return ranks_to_send_to(); 
+        return peers; 
     }
     virtual actions_t comm_actions() override {
         actions_t result;
-        for (auto r : ranks_to_recv_from()) {
-            result.push_back({r, action_t::RECV});
-            result.push_back({r, action_t::SEND});
+        for (auto r : peers) {
+            result.push_back({r, action_t::COLL});
         }
         return result;
     }

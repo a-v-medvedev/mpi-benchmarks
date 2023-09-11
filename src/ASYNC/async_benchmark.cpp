@@ -51,13 +51,14 @@ namespace async_suite {
 #define ASYNC_EXTRA_BARRIER 0
 #endif
 
-    static void barrier(int rank, int np) {
+    static void barrier(int rank, int np, const MPI_Comm &comm = MPI_COMM_WORLD) {
 #if !ASYNC_EXTRA_BARRIER
         (void)rank;
         (void)np;
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(comm);
 #else
-
+        // Explicit implementation of dissemenation barrier algorithm -- if we are not sure the 
+        // standard MPI_Barrier() is "strong" and "symmetric" enough.
         int mask = 0x1;
         int dst, src;
         int tmp = 0;
@@ -66,7 +67,7 @@ namespace async_suite {
             src = (rank - mask + np) % np;
             MPI_Sendrecv(&tmp, 0, MPI_BYTE, dst, 1010,
                          &tmp, 0, MPI_BYTE, src, 1010,
-                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                         comm, MPI_STATUS_IGNORE);
         }
 #endif
     }
@@ -171,6 +172,9 @@ namespace async_suite {
         GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
         AsyncBenchmark::init();
         topo = topohelper::create(p.get("allreduce"), np, rank);
+        int colour = (topo->is_active() ? topo->get_group() : MPI_UNDEFINED);
+        int key = rank;
+        MPI_Comm_split(MPI_COMM_WORLD, colour, key, &coll_comm); 
     }
 
     void AsyncBenchmark_iallreduce::init() {
@@ -178,6 +182,9 @@ namespace async_suite {
         AsyncBenchmark::init();
         calc.init();
         topo = topohelper::create(p.get("allreduce"), np, rank);
+        int colour = (topo->is_active() ? topo->get_group() : MPI_UNDEFINED);
+        int key = rank;
+        MPI_Comm_split(MPI_COMM_WORLD, colour, key, &coll_comm); 
     }
 
 
@@ -424,22 +431,24 @@ namespace async_suite {
         size_t b = (size_t)count * (size_t)dtsize;
         size_t n = allocated_size / b;
         double t1 = 0, t2 = 0;
-        for (int i = 0; i < ncycles + nwarmup; i++) {
-            if (i >= nwarmup) t1 = MPI_Wtime();
-            update_sbuf((i%n)*b, b);
-            MPI_Allreduce(get_sbuf() + (i%n)*b, get_rbuf() + (i%n)*b, count, datatype, MPI_SUM, MPI_COMM_WORLD);
-            update_rbuf((i%n)*b, b);
-            if (i >= nwarmup) {
-                t2 = MPI_Wtime();
-                time += (t2 - t1);
-            }
-            barrier(rank, np);
+        if (topo->is_active()) {
+            for (int i = 0; i < ncycles + nwarmup; i++) {
+                if (i >= nwarmup) t1 = MPI_Wtime();
+                update_sbuf((i%n)*b, b);
+                MPI_Allreduce(get_sbuf() + (i%n)*b, get_rbuf() + (i%n)*b, count, datatype, MPI_SUM, coll_comm);
+                update_rbuf((i%n)*b, b);
+                if (i >= nwarmup) {
+                    t2 = MPI_Wtime();
+                    time += (t2 - t1);
+                }
+                barrier(rank, np, coll_comm);
 #if ASYNC_EXTRA_BARRIER
-            barrier(rank, np);
-            barrier(rank, np);
-            barrier(rank, np);
-            barrier(rank, np);
+                barrier(rank, np, coll_comm);
+                barrier(rank, np, coll_comm);
+                barrier(rank, np, coll_comm);
+                barrier(rank, np, coll_comm);
 #endif
+            }
         }
         time /= ncycles;
         MPI_Barrier(MPI_COMM_WORLD);

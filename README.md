@@ -72,7 +72,7 @@ The topologies listed below are meaningful for collective communication benchmar
 - `split` -- is the way to split the `MPI_COMM_WORLD` communicator into separate groups so that the collective communication happens within each of those sections independently. The collective communication function that is measured on this rank topology depends on the specific benchmark. The parameters that tune this topology are:
 
     * `nparts` -- an integer that defines the number of groups to split `MPI_COMM_WORLD` into. The default value is `nparts=1`, that is: no splitting, the whole `MPI_COMM_WORLD` is used for collective communication.
-    * `combination` -- `split`/`interleaved`: the way ranks are combined. For the `split` option, the sequential ranks form groups; for the `interleaved` option, the groups are interleaving. For example:
+    * `combination` -- `separate`/`interleaved`: the way ranks are combined. For the `separate` option, the sequential ranks form groups; for the `interleaved` option, the groups are interleaving. For example:
         - 8 ranks that are split into 4 groups with `combination=split`. The correspondence of ranks and groups looks like this:\
           `{ rank=0: group=0; rank=1: group=0; rank=2: group=1; rank=3: group=1; rank=4: group=2; rank=5: group=2; rank=6: group=3; rank=7: group=3 }`. 
         - the same case but with `combination=interleaved`. The correspondence looks different :\
@@ -88,7 +88,7 @@ The topologies listed below are meaningful for collective communication benchmar
 The topology and its parameters are defined for each benchmark separately. The command line (or equivalent YAML-file) option is: `-BENCH_params`, where `BENCH` stands for one of the short benchmark names: `pt2pt`, `na2a`, `rma_pt2pt`, `allreduce`. The parameter values for these options are the list of definitions in the form: `keyword=value:keyword=value:...`, where the keyword is either `topology` to denote the communication topology or the parameter names for a selected topology. For example:
 
 * Option: `-pt2pt_params topology=ping-pong:stride=1:bidirectional=false` sets up the `ping-pong` pairwise topology for both `sync_pt2pt` and `async_pt2pt` benchmarks, and defines the parameters of it
-* Option: `-allreduce_params topology=split:combination=split:nparts=2` sets up the `split` topology for both `sync_allreduce` and `async_allreduce` benchmarks.
+* Option: `-allreduce_params topology=split:combination=separate:nparts=2` sets up the `separate` topology for both `sync_allreduce` and `async_allreduce` benchmarks.
 
 ## Calculation workload options
 
@@ -190,7 +190,40 @@ sync_pt2pt:
         3: [1, 1, 2, 2, 1, 1, 2, 2]
 ```
 
+Another example for colective benchmark:
 
+```
+mpirun -np 8 ./IMB-ASYNC sync_allreduce -allreduce_params topology=split:combination=interleaved:nparts=4:nactive=2 -len 4 -output out.yaml
+```
+
+Results in the `out.yaml` file with the contents:
+
+```
+sync_allreduce: 
+    tavg: 
+        4: 4.5656099999999172e-07
+    tmin: 
+        4: 0
+    tmax:
+        4: 3.9459020000000053e-06
+    over_full: 
+        4: 0
+    over_comm: 
+        4: 0
+    over_calc: 
+        4: 0
+    topo: 
+        np: 8
+        name: split 
+        0: [4] 
+        1: [5] 
+        2: [] 
+        3: [] 
+        4: [0] 
+        5: [1] 
+        6: [] 
+        7: []
+```
 
 ## Extending the suite and adding custom benchmarks
 
