@@ -85,26 +85,34 @@ namespace async_suite {
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     }
 
-    size_t AsyncBenchmark::get_bufsize_for_len(size_t len) {
-         return len * (size_t)dtsize * buf_size_multiplier();
+    size_t AsyncBenchmark::get_recv_bufsize_for_len(size_t len) {
+         return len * (size_t)dtsize * buf_size_multiplier_recv();
+    }
+
+    size_t AsyncBenchmark::get_send_bufsize_for_len(size_t len) {
+         return len * (size_t)dtsize * buf_size_multiplier_send();
     }
 
     void AsyncBenchmark::alloc() {
         GET_PARAMETER(sys::host_alloc_t, host_alloc_mode);
-        size_t size_to_alloc = get_bufsize_for_len(scope->get_max_len());
-        if (size_to_alloc <= ASSUMED_CACHE_SIZE * 3)
-            size_to_alloc = ASSUMED_CACHE_SIZE * 3;
-        sys::host_mem_alloc(host_sbuf, size_to_alloc, host_alloc_mode);
-        sys::host_mem_alloc(host_rbuf, size_to_alloc, host_alloc_mode);
+        size_t size_to_alloc_send = get_send_bufsize_for_len(scope->get_max_len());
+        size_t size_to_alloc_recv = get_recv_bufsize_for_len(scope->get_max_len());
+        if (size_to_alloc_send <= ASSUMED_CACHE_SIZE * 3)
+            size_to_alloc_send = ASSUMED_CACHE_SIZE * 3;
+        if (size_to_alloc_recv <= ASSUMED_CACHE_SIZE * 3)
+            size_to_alloc_recv = ASSUMED_CACHE_SIZE * 3;
+        sys::host_mem_alloc(host_sbuf, size_to_alloc_send, host_alloc_mode);
+        sys::host_mem_alloc(host_rbuf, size_to_alloc_recv, host_alloc_mode);
         if (host_rbuf == nullptr || host_sbuf == nullptr)
             throw std::runtime_error("AsyncBenchmark: memory allocation error.");
         if (is_gpu) {
-            sys::device_mem_alloc(device_sbuf, size_to_alloc, sys::device_alloc_t::DA_CUDA);
-            sys::device_mem_alloc(device_rbuf, size_to_alloc, sys::device_alloc_t::DA_CUDA);
+            sys::device_mem_alloc(device_sbuf, size_to_alloc_send, sys::device_alloc_t::DA_CUDA);
+            sys::device_mem_alloc(device_rbuf, size_to_alloc_recv, sys::device_alloc_t::DA_CUDA);
             if (device_rbuf == nullptr || device_sbuf == nullptr)
                 throw std::runtime_error("AsyncBenchmark: device memory allocation error.");
         }
-        allocated_size = size_to_alloc;
+        allocated_size_send = size_to_alloc_send;
+        allocated_size_recv = size_to_alloc_recv;
     }
 
     AsyncBenchmark::~AsyncBenchmark() {
@@ -160,9 +168,14 @@ namespace async_suite {
         GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
         AsyncBenchmark::init();
         topo = topohelper::create(p.get("rma_pt2pt"), np, rank);
-        MPI_Win_create(get_sbuf(0, 0), allocated_size, dtsize, MPI_INFO_NULL,
-                       MPI_COMM_WORLD, &win);
+        auto sources = topo->ranks_to_send_to();
+        auto dests = topo->ranks_to_recv_from();
+        comm_size = std::max(sources.size(), dests.size());
         AsyncBenchmark::alloc();
+        MPI_Win_create(get_sbuf(0, 0), allocated_size_send, dtsize, MPI_INFO_NULL,
+                       MPI_COMM_WORLD, &win_send);
+        MPI_Win_create(get_rbuf(0, 0), allocated_size_recv, dtsize, MPI_INFO_NULL,
+                       MPI_COMM_WORLD, &win_recv);
     }
 
     void AsyncBenchmark_rma_ipt2pt::init() {
@@ -170,9 +183,14 @@ namespace async_suite {
         AsyncBenchmark::init();
         calc.init();
         topo = topohelper::create(p.get("rma_pt2pt"), np, rank);
-        MPI_Win_create(get_sbuf(0, 0), allocated_size, dtsize, MPI_INFO_NULL,
-                       MPI_COMM_WORLD, &win);
+        auto sources = topo->ranks_to_send_to();
+        auto dests = topo->ranks_to_recv_from();
+        comm_size = std::max(sources.size(), dests.size());
         AsyncBenchmark::alloc();
+        MPI_Win_create(get_sbuf(0, 0), allocated_size_send, dtsize, MPI_INFO_NULL,
+                       MPI_COMM_WORLD, &win_send);
+        MPI_Win_create(get_rbuf(0, 0), allocated_size_recv, dtsize, MPI_INFO_NULL,
+                       MPI_COMM_WORLD, &win_recv);
     }
 
     void AsyncBenchmark_allreduce::init() {
@@ -225,56 +243,56 @@ namespace async_suite {
         AsyncBenchmark::alloc();
     }
 
-    char *AsyncBenchmark::get_sbuf(size_t i, size_t exch_size) { 
-        size_t n = allocated_size / exch_size;
+    char *AsyncBenchmark::get_sbuf(size_t i, size_t exch_size, size_t block) { 
+        size_t n = allocated_size_send / buf_size_multiplier_send() / exch_size;
+        size_t block_off = allocated_size_send / buf_size_multiplier_send() * block;
         size_t off = (i%n) * exch_size; 
         if (!is_cuda_aware) {
-            return host_sbuf + off;
+            return host_sbuf + block_off + off;
         } else {
-            return device_sbuf + off;
+            return device_sbuf + block_off + off;
         }
     }
 
-    char *AsyncBenchmark::get_rbuf(size_t i, size_t exch_size) { 
-        size_t n = allocated_size / exch_size;
+    char *AsyncBenchmark::get_rbuf(size_t i, size_t exch_size, size_t block) { 
+        size_t n = allocated_size_recv / buf_size_multiplier_recv() / exch_size;
+        size_t block_off = allocated_size_recv / buf_size_multiplier_recv() * block;
         size_t off = (i%n) * exch_size; 
         if (!is_cuda_aware) {
-            return host_rbuf + off;
+            return host_rbuf + block_off + off;
         } else {
-            return device_rbuf + off;
+            return device_rbuf + block_off + off;
         }
     }
 
-    void AsyncBenchmark::update_sbuf(size_t i, size_t exch_size, size_t size) {
+    void AsyncBenchmark::sync_sbuf_with_device(size_t i, size_t exch_size) {
         if (!is_gpu)
             return;
         if (!is_cuda_aware) {
 #ifdef WITH_CUDA
-            size_t n = allocated_size / exch_size;
-            size_t off = (i%n)*b;
-            sys::cuda::d2h_transfer((char *)host_sbuf + off, (char *)device_sbuf + off, size);
+            auto off = get_sbuf(size_t i, size_t exch_size) - (char *)host_sbuf;
+            sys::cuda::d2h_transfer((char *)host_sbuf + off, (char *)device_sbuf + off, exch_size * bufsize_multiplier_send());
 #else
             (void)i;
             (void)exch_size;
-            (void)size;
 #endif
         }
     }
-    void AsyncBenchmark::update_rbuf(size_t i, size_t exch_size, size_t size) { 
+
+    void AsyncBenchmark::sync_rbuf_with_device(size_t i, size_t exch_size) { 
         if (!is_gpu)
             return;
         if (!is_cuda_aware) {
 #ifdef WITH_CUDA            
-            size_t n = allocated_size / exch_size;
-            size_t off = (i%n)*b;
-            sys::cuda::h2d_transfer((char *)device_rbuf + off, host_rbuf + off, size);
+            auto off = get_rbuf(size_t i, size_t exch_size) - (char *)host_rbuf;
+            sys::cuda::h2d_transfer((char *)device_rbuf + off, host_rbuf + off, exch_size * bufsize_multiplier_recv());
 #else
             (void)i;
             (void)exch_size;
-            (void)size;            
 #endif            
         }
     }
+
     void AsyncBenchmark::run(const scope_item &item) { 
         GET_PARAMETER(MPI_Datatype, datatype);
         GET_PARAMETER(std::vector<int>, ncycles);
@@ -373,7 +391,7 @@ namespace async_suite {
             MPI_Barrier(MPI_COMM_WORLD);
             return false;
         }
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0;
         const int tag = 1;
         auto comm_actions = topo->comm_actions();
@@ -382,12 +400,12 @@ namespace async_suite {
             for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
                 int rank = comm_actions[commstage].rank;
                 if (comm_actions[commstage].action == action_t::SEND) {
-                    update_sbuf(i, b, b);
+                    sync_sbuf_with_device(i, b);
                     MPI_Send(get_sbuf(i, b), count, datatype, rank, tag, MPI_COMM_WORLD);
                 } else if (comm_actions[commstage].action == action_t::RECV) {
                     MPI_Recv(get_rbuf(i, b), count, datatype, rank, MPI_ANY_TAG, 
                              MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    update_rbuf(i, b, b);
+                    sync_rbuf_with_device(i, b);
                 }
             }
         }
@@ -404,7 +422,7 @@ namespace async_suite {
             MPI_Barrier(MPI_COMM_WORLD);
             return false;
         }
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0, 
                                               local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         const int tag = 1;
@@ -422,7 +440,7 @@ namespace async_suite {
                 int rank = comm_actions[commstage].rank;
                 if (i == nwarmup) t1 = MPI_Wtime();
                 if (comm_actions[commstage].action == action_t::SEND) {
-                    update_sbuf(i, b, b);
+                    sync_sbuf_with_device(i, b);
                     MPI_Isend(get_sbuf(i, b), count, datatype, rank, tag, MPI_COMM_WORLD, 
                               &requests[nr++]);
                 } else if (comm_actions[commstage].action == action_t::RECV) {
@@ -440,7 +458,7 @@ namespace async_suite {
             MPI_Waitall(calc.num_requests, requests, MPI_STATUSES_IGNORE);
             for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
                 if (comm_actions[commstage].action == action_t::RECV) {
-                    update_rbuf(i, b, b);
+                    sync_rbuf_with_device(i, b);
                 }
             }
         }
@@ -463,14 +481,14 @@ namespace async_suite {
         tover_comm = 0;
         tover_calc = 0;
 
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0;
         if (topo->is_active()) {
             for (int i = 0; i < ncycles + nwarmup; i++) {
                 if (i >= nwarmup) t1 = MPI_Wtime();
-                update_sbuf(i, b, b);
+                sync_sbuf_with_device(i, b);
                 MPI_Allreduce(get_sbuf(i, b), get_rbuf(i, b), count, datatype, MPI_SUM, coll_comm);
-                update_rbuf(i, b, b);
+                sync_rbuf_with_device(i, b);
                 if (i >= nwarmup) {
                     t2 = MPI_Wtime();
                     time += (t2 - t1);
@@ -493,7 +511,7 @@ namespace async_suite {
     bool AsyncBenchmark_iallreduce::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
                                               double &time, double &tover_comm, double &tover_calc) {
 
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0,
                                               local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         time = 0;
@@ -503,11 +521,11 @@ namespace async_suite {
         MPI_Status  status;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
-            update_sbuf(i, b, b);
+            sync_sbuf_with_device(i, b);
             MPI_Iallreduce(get_sbuf(i, b), get_rbuf(i, b), count, datatype, MPI_SUM, coll_comm, request);
             calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
             MPI_Wait(request, &status);
-            update_rbuf(i, b, b);
+            sync_rbuf_with_device(i, b);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -539,14 +557,14 @@ namespace async_suite {
         time = 0;
         tover_comm = 0;
         tover_calc = 0;
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0;
         if (topo->is_active()) {
             for (int i = 0; i < ncycles + nwarmup; i++) {
                 if (i >= nwarmup) t1 = MPI_Wtime();
-                update_sbuf(i, b, b);
+                sync_sbuf_with_device(i, b);
                 MPI_Alltoall(get_sbuf(i, b), count, datatype, get_rbuf(i, b), count, datatype, coll_comm);
-                update_rbuf(i, b, b);
+                sync_rbuf_with_device(i, b);
                 if (i >= nwarmup) {
                     t2 = MPI_Wtime();
                     time += (t2 - t1);
@@ -568,7 +586,7 @@ namespace async_suite {
 
     bool AsyncBenchmark_ialltoall::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
                                               double &time, double &tover_comm, double &tover_calc) {
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0,
                                               local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         time = 0;
@@ -578,11 +596,11 @@ namespace async_suite {
         MPI_Status  status;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
-            update_sbuf(i, b, b);
+            sync_sbuf_with_device(i, b);
             MPI_Ialltoall(get_sbuf(i, b), count, datatype, get_rbuf(i, b), count, datatype, coll_comm, request);
             calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
             MPI_Wait(request, &status);
-            update_rbuf(i, b, b);
+            sync_rbuf_with_device(i, b);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -618,15 +636,15 @@ namespace async_suite {
             MPI_Barrier(MPI_COMM_WORLD);
             return false;
         }
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
-            update_sbuf(i, b, b);
+            sync_sbuf_with_device(i, b);
             MPI_Neighbor_alltoall(get_sbuf(i, b), count, datatype,
                                   get_rbuf(i, b), count, datatype,
                                   graph_comm);            
-            update_rbuf(i, b, b);
+            sync_rbuf_with_device(i, b);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -647,7 +665,7 @@ namespace async_suite {
 
     bool AsyncBenchmark_ina2a::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
                                          double &time, double &tover_comm, double &tover_calc) {         
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0,
                                               local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         time = 0;
@@ -661,13 +679,13 @@ namespace async_suite {
         MPI_Status  status;
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i >= nwarmup) t1 = MPI_Wtime();
-            update_sbuf(i, b, b);
+            sync_sbuf_with_device(i, b);
             MPI_Ineighbor_alltoall(get_sbuf(i, b), count, datatype,
                                    get_rbuf(i, b), count, datatype,
                                    graph_comm, request);
             calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
             MPI_Wait(request, &status);
-            update_rbuf(i, b, b);
+            sync_rbuf_with_device(i, b);
             if (i >= nwarmup) {
                 t2 = MPI_Wtime();
                 time += (t2 - t1);
@@ -702,23 +720,26 @@ namespace async_suite {
             MPI_Barrier(MPI_COMM_WORLD);
             return false;
         }
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0;
         auto comm_actions = topo->comm_actions();
         for (int i = 0; i < ncycles + nwarmup; i++) {
             if (i == nwarmup) t1 = MPI_Wtime();
             for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
+                int ns = 0, nr = 0;
                 int rank = comm_actions[commstage].rank;
                 size_t off = (get_sbuf(i, b) - get_sbuf(0, 0)) / dtsize;
-                update_sbuf(i, b, b);
-                MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
+                sync_sbuf_with_device(i, b);
                 if (comm_actions[commstage].action == action_t::RECV) {
-                    MPI_Get(get_rbuf(i, b), count, datatype, rank, off, count, datatype, win);
+                    MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win_recv);
+                    MPI_Get(get_rbuf(i, b, nr++), count, datatype, rank, off, count, datatype, win_recv);
+                    MPI_Win_unlock(rank, win_recv);
                 } else if (comm_actions[commstage].action == action_t::SEND) {
-                    MPI_Put(get_sbuf(i, b), count, datatype, rank, off, count, datatype, win);
+                    MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win_send);
+                    MPI_Put(get_sbuf(i, b, ns++), count, datatype, rank, off, count, datatype, win_send);
+                    MPI_Win_unlock(rank, win_send);
                 }
-                MPI_Win_unlock(rank, win);
-                update_rbuf(i, b, b);
+                sync_rbuf_with_device(i, b);
             }
         }
         t2 = MPI_Wtime();
@@ -734,7 +755,7 @@ namespace async_suite {
             MPI_Barrier(MPI_COMM_WORLD);
             return false;
         }
-        size_t b = get_bufsize_for_len(count);
+        size_t b = get_send_bufsize_for_len(count);
         double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0,
                                               local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
         auto comm_actions = topo->comm_actions();
@@ -742,42 +763,68 @@ namespace async_suite {
         requests = (MPI_Request *)calloc(sizeof(MPI_Request), topo->get_num_actions());
         calc.reqs = requests;
         calc.num_requests = topo->get_num_actions();
-        std::map<int, bool> lock_ranks;
-        auto ranks = topo->ranks_to_recv_from();
-        auto rankss = topo->ranks_to_send_to();
-        ranks.insert(ranks.begin(), rankss.begin(), rankss.end());
+        using status_and_num_t = std::pair<bool, int>;
+        std::map<int, status_and_num_t> lock_ranks;
+        struct peer_data {
+            std::map<int, status_and_num_t> lock_ranks;
+            size_t n = 0;
+            void init(const std::vector<int> &ranks) {
+                for (auto r : ranks) {
+                    lock_ranks[r] = status_and_num_t {false, 0};
+                }
+            }
+            int lock_if_needed(int r, MPI_Win &win, bool *result_ptr = nullptr) {
+                auto &status_and_num = lock_ranks[r];
+                if (!status_and_num.first) {
+                    MPI_Win_lock(MPI_LOCK_SHARED, r, 0, win);
+                    lock_ranks[r] = status_and_num_t { true, n };
+                    if (result_ptr)
+                        *result_ptr = true;
+                    return n++;
+                }
+                if (result_ptr)
+                    *result_ptr = false;
+                return status_and_num.second;
+            }
+            int unlock_all(MPI_Win &win) {
+                for (auto &it : lock_ranks) {
+                    auto &status_and_num = it.second;
+                    if (status_and_num.first) {
+                        MPI_Win_unlock(it.first, win);
+                        status_and_num = status_and_num_t { false, 0 };
+                    }
+                }
+                int retval = n;
+                n = 0;
+                return retval;
+            }
+        } sendinfo, recvinfo;
+        auto ranks_recv = topo->ranks_to_recv_from();
+        auto ranks_send = topo->ranks_to_send_to();
         for (int i = 0; i < ncycles + nwarmup; i++) {
             size_t off = (get_sbuf(i, b) - get_sbuf(0, 0)) / dtsize;
-            for (auto r : ranks) {
-                lock_ranks[r] = false;
-            }
+            sendinfo.init(ranks_recv);
+            recvinfo.init(ranks_send);
             if (i == nwarmup) t1 = MPI_Wtime();
             int nr = 0;
+            sync_sbuf_with_device(i, b);
             for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
                 int r = comm_actions[commstage].rank;
-                assert(lock_ranks.find(r) != lock_ranks.end());
-                if (!lock_ranks[r]) {
-                    update_sbuf(i, b, b);
-                    MPI_Win_lock(MPI_LOCK_SHARED, r, 0, win);
-                    lock_ranks[r] = true;
-                }
                 if (comm_actions[commstage].action == action_t::RECV) {
-                    MPI_Rget(get_rbuf(i, b), count, datatype, r, off, 
-                            count, datatype, win, &requests[nr++]);
+                    int n = sendinfo.lock_if_needed(r, win_recv);
+                    MPI_Rget(get_rbuf(i, b, n), count, datatype, r, off, 
+                             count, datatype, win_recv, &requests[nr++]);
                 } else if (comm_actions[commstage].action == action_t::SEND) {
-                    MPI_Rput(get_sbuf(i, b), count, datatype, r, off, 
-                            count, datatype, win, &requests[nr++]);
+                    int n = sendinfo.lock_if_needed(r, win_send);
+                    MPI_Rput(get_sbuf(i, b, n), count, datatype, r, off, 
+                             count, datatype, win_send, &requests[nr++]);
                 }
             }
             calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
             MPI_Waitall(calc.num_requests, requests, MPI_STATUSES_IGNORE);
-            for (auto r : ranks) {
-                if (lock_ranks[r]) {
-                    lock_ranks[r] = false;
-                    MPI_Win_unlock(r, win);
-                    update_rbuf(i, b, b);
-                }
-            }
+            sendinfo.unlock_all(win_send);
+            recvinfo.unlock_all(win_recv);
+            sync_rbuf_with_device(i, b);
             if (i >= nwarmup) {
                 total_ctime += local_ctime;
                 total_tover_comm += local_tover_comm;
