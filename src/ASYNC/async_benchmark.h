@@ -77,10 +77,12 @@ namespace async_suite {
 
         void setup_the_gpu_rank();
 
-        virtual char *get_sbuf(size_t i, size_t b, size_t block = 0);
-        virtual char *get_rbuf(size_t i, size_t b, size_t block = 0);
-        virtual void sync_sbuf_with_device(size_t i, size_t off);
-        virtual void sync_rbuf_with_device(size_t i, size_t off);
+        char *get_sbuf();
+        char *get_rbuf();
+        char *get_sbuf(size_t i, size_t b, size_t block = 0);
+        char *get_rbuf(size_t i, size_t b, size_t block = 0);
+        void sync_sbuf_with_device(size_t i, size_t off);
+        void sync_rbuf_with_device(size_t i, size_t off);
             
         AsyncBenchmark() {}
         virtual ~AsyncBenchmark(); 

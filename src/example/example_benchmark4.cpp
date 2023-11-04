@@ -131,7 +131,6 @@ namespace example_suite4 {
         int np, rank;
         public:
         virtual void init() {
-            GET_PARAMETER(vector<int>, len);
             GET_PARAMETER(MPI_Datatype, datatype);
             auto sc = std::make_shared<VarLenScope>(0, 22);
             scope = sc;
