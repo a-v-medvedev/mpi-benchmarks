@@ -145,7 +145,7 @@ struct topo_split : public topohelper {
     int nparts, active_parts;
     int group;
     std::vector<int> peers;
-    int rank2group(int r) { return interleaved ? r % nparts : r / nparts; }
+    int rank2group(int r) { return interleaved ? r % nparts : r / (np / nparts); }
     bool handle_split() {
         group = rank2group(rank);
         if (group > active_parts - 1) {

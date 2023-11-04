@@ -73,7 +73,7 @@ The topologies listed below are meaningful for collective communication benchmar
 
     * `nparts` -- an integer that defines the number of groups to split `MPI_COMM_WORLD` into. The default value is `nparts=1`, that is: no splitting, the whole `MPI_COMM_WORLD` is used for collective communication.
     * `combination` -- `separate`/`interleaved`: the way ranks are combined. For the `separate` option, the sequential ranks form groups; for the `interleaved` option, the groups are interleaving. For example:
-        - 8 ranks that are split into 4 groups with `combination=split`. The correspondence of ranks and groups looks like this:\
+        - 8 ranks that are split into 4 groups with `combination=separate`. The correspondence of ranks and groups looks like this:\
           `{ rank=0: group=0; rank=1: group=0; rank=2: group=1; rank=3: group=1; rank=4: group=2; rank=5: group=2; rank=6: group=3; rank=7: group=3 }`. 
         - the same case but with `combination=interleaved`. The correspondence looks different :\
           `{ rank=0: group=0; rank=1: group=1; rank=2: group=2; rank=3: group=3; rank=4: group=0; rank=5: group=1; rank=6: group=2; rank=7: group=3 }`.
