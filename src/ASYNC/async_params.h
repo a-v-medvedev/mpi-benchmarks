@@ -94,7 +94,8 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
     static void set_output(std::ostream &output) { poutput = &output; }
     static const params::expected_params_t &get_expected_params() {
         using namespace params;
-        static const std::vector<std::string> ONLYBENCHS = {"pt2pt", "allreduce", "rma_pt2pt", "na2a"};
+        //static const std::vector<std::string> ONLYBENCHS = {"pt2pt", "allreduce", "rma_pt2pt", "na2a"};
+        static const std::vector<std::string> ONLYBENCHS = {"!workload", "!calc_calibration"};
         static const expected_params_t expected_params = {
             {"component_details:",  {value::S, NONCHANGEABLE, ALLFAMILIES,  NOMINMAX,   ALLALLOWED}},
             {"topology",            {value::S, NONCHANGEABLE, ONLYBENCHS,   NOMINMAX,   ALLALLOWED}},
@@ -118,17 +119,11 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
     static void set_family_defaults(my_list &list, const std::string &family,
                                     const std::string &list_name) {
         (void)family;
-        if (list_name == "pt2pt") {
+        if (list_name == "pt2pt" || list_name == "rma_pt2pt" || list_name == "na2a") {
             list.set_value_if_missing<std::string>("topology", "ping-pong");
         }
-        if (list_name == "allreduce") {
+        if (list_name == "allreduce" || list_name == "alltoall") {
             list.set_value_if_missing<std::string>("topology", "split");
-        }
-        if (list_name == "rma_pt2pt") {
-            list.set_value_if_missing<std::string>("topology", "ping-pong");
-        }
-        if (list_name == "na2a") {
-            list.set_value_if_missing<std::string>("topology", "ping-pong");
         }
         if (list_name == "workload") {
             list.set_value_if_missing<bool>("cpu_calculations", false);
@@ -163,7 +158,7 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
                 list.set_value_if_missing<uint32_t>("ndim", 1);
             }
             if (list.get_string("topology") == "split") {
-                list.set_value_if_missing<std::string>("combination", "interleaved");
+                list.set_value_if_missing<std::string>("combination", "separate");
                 list.set_value_if_missing<uint32_t>("nparts", 1);
                 if (list.get_string("combination") == "separate" && list.is_value_set("nactive")) {
                     throw std::runtime_error("params: for 'split' topology: parameter 'nactive'"

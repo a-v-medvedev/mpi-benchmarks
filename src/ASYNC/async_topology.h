@@ -109,14 +109,16 @@ struct topo_pingpong : public topohelper {
     virtual int get_group() { return group; }
     virtual actions_t comm_actions() override {
         actions_t result;
-        if (is_even()) {
-            result.push_back({prev(), action_t::SEND});
-            if (bidirectional)
-                result.push_back({prev(), action_t::RECV});
-        } else {
-            result.push_back({next(), action_t::RECV});
-            if (bidirectional)
-                result.push_back({next(), action_t::SEND});
+        if (is_active()) {
+            if (is_even()) {
+                result.push_back({prev(), action_t::SEND});
+                if (bidirectional)
+                    result.push_back({prev(), action_t::RECV});
+            } else {
+                result.push_back({next(), action_t::RECV});
+                if (bidirectional)
+                    result.push_back({next(), action_t::SEND});
+            }
         }
         return result;
     }
@@ -125,18 +127,18 @@ struct topo_pingpong : public topohelper {
     }
     protected:
 	int prev() {
-			int distance = stride % np;
-			int p = rank - distance;
-			if (p < 0)
-					p += np;
-			return p;
+        int distance = stride % np;
+		int p = rank - distance;
+		if (p < 0)
+			p += np;
+		return p;
 	}
 	int next() {
-			int distance = stride % np;
-			int n = rank + distance;
-			if (n >= np)
-					n -= np;
-			return n;
+		int distance = stride % np;
+		int n = rank + distance;
+		if (n >= np)
+			n -= np;
+		return n;
 	}
 };
 
@@ -145,7 +147,7 @@ struct topo_split : public topohelper {
     int nparts, active_parts;
     int group;
     std::vector<int> peers;
-    int rank2group(int r) { return interleaved ? r % nparts : r / nparts; }
+    int rank2group(int r) { return interleaved ? r % nparts : r / (np / nparts); }
     bool handle_split() {
         group = rank2group(rank);
         if (group > active_parts - 1) {
@@ -209,22 +211,24 @@ struct topo_neighb : public topohelper {
 	virtual bool is_active() override { return active; }
     virtual actions_t comm_actions() override {
         actions_t result;
-        if (is_even()) {
-            for (int i = 0; i < nneighb; i++) {
-                result.push_back({next(i), action_t::SEND});
-                result.push_back({prev(i), action_t::RECV});
-                if (bidirectional) {
-                    result.push_back({next(i), action_t::RECV});
-                    result.push_back({prev(i), action_t::SEND});
+        if (is_active()) {
+            if (is_even()) {
+                for (int i = 0; i < nneighb; i++) {
+                    result.push_back({next(i), action_t::SEND});
+                    result.push_back({prev(i), action_t::RECV});
+                    if (bidirectional) {
+                        result.push_back({next(i), action_t::RECV});
+                        result.push_back({prev(i), action_t::SEND});
+                    }
                 }
-            }
-        } else {
-            for (int i = 0; i < nneighb; i++) {
-                result.push_back({prev(i), action_t::RECV});
-                result.push_back({next(i), action_t::SEND});
-                if (bidirectional) {
-                    result.push_back({prev(i), action_t::SEND});
-                    result.push_back({next(i), action_t::RECV});
+            } else {
+                for (int i = 0; i < nneighb; i++) {
+                    result.push_back({prev(i), action_t::RECV});
+                    result.push_back({next(i), action_t::SEND});
+                    if (bidirectional) {
+                        result.push_back({prev(i), action_t::SEND});
+                        result.push_back({next(i), action_t::RECV});
+                    }
                 }
             }
         }
@@ -304,6 +308,8 @@ struct topo_halo : public topohelper {
     bool is_active() { return rank < required_nranks; }
     virtual actions_t comm_actions() override {
         actions_t peers;
+        if (!is_active())
+            return peers;
         peers.resize(ndims * (bidirectional ? 2 : 1));
         std::vector<unsigned int> mysubs = ranktosubs(rank);
 		// chess coloring flag
