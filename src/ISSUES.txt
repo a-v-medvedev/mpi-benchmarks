@@ -1,0 +1,5 @@
+- na2a seems to hang up when there are inactive ranks. Reproduce: ping-pong
+  with odd number of ranks; halo with ndim=2 and 5 ranks.
+- in halo topology, bidirectional=false seems to produce wrong sequences; can
+  be reproduced with pt2pt and na2a.
+

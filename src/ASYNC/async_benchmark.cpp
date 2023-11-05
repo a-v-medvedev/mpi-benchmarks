@@ -94,6 +94,9 @@ namespace async_suite {
     }
 
     void AsyncBenchmark::alloc() {
+        if (!topo->is_active()) {
+            return;
+        }
         GET_PARAMETER(sys::host_alloc_t, host_alloc_mode);
         size_t size_to_alloc_send = get_send_bufsize_for_len(scope->get_max_len());
         size_t size_to_alloc_recv = get_recv_bufsize_for_len(scope->get_max_len());
@@ -140,12 +143,14 @@ namespace async_suite {
         auto sources = topo->ranks_to_send_to();
         auto dests = topo->ranks_to_recv_from();
         comm_size = std::max(sources.size(), dests.size());
-        MPI_Dist_graph_create_adjacent(MPI_COMM_WORLD,
-                                       sources.size(), sources.data(), (const int *)MPI_UNWEIGHTED,
-                                       dests.size(), dests.data(), (const int *)MPI_UNWEIGHTED,
-                                       MPI_INFO_NULL, true,
-                                       &graph_comm);
         AsyncBenchmark::alloc();
+        if (topo->is_active()) {
+            MPI_Dist_graph_create_adjacent(MPI_COMM_WORLD,
+                                           sources.size(), sources.data(), (const int *)MPI_UNWEIGHTED,
+                                           dests.size(), dests.data(), (const int *)MPI_UNWEIGHTED,
+                                           MPI_INFO_NULL, true,
+                                           &graph_comm);
+        }
     }
 
     void AsyncBenchmark_ina2a::init() {
@@ -156,12 +161,14 @@ namespace async_suite {
         auto sources = topo->ranks_to_send_to();
         auto dests = topo->ranks_to_recv_from();
         comm_size = std::max(sources.size(), dests.size());
-        MPI_Dist_graph_create_adjacent(MPI_COMM_WORLD,
-                                       sources.size(), sources.data(), (const int *)MPI_UNWEIGHTED,
-                                       dests.size(), dests.data(), (const int *)MPI_UNWEIGHTED,
-                                       MPI_INFO_NULL, true,
-                                       &graph_comm);
         AsyncBenchmark::alloc();
+        if (topo->is_active()) {
+            MPI_Dist_graph_create_adjacent(MPI_COMM_WORLD,
+                                           sources.size(), sources.data(), (const int *)MPI_UNWEIGHTED,
+                                           dests.size(), dests.data(), (const int *)MPI_UNWEIGHTED,
+                                           MPI_INFO_NULL, true,
+                                           &graph_comm);
+        }
     }
    
     void AsyncBenchmark_rma_pt2pt::init() {
@@ -172,10 +179,12 @@ namespace async_suite {
         auto dests = topo->ranks_to_recv_from();
         comm_size = std::max(sources.size(), dests.size());
         AsyncBenchmark::alloc();
-        MPI_Win_create(get_sbuf(), allocated_size_send, dtsize, MPI_INFO_NULL,
-                       MPI_COMM_WORLD, &win_send);
-        MPI_Win_create(get_rbuf(), allocated_size_recv, dtsize, MPI_INFO_NULL,
-                       MPI_COMM_WORLD, &win_recv);
+        if (topo->is_active()) {
+            MPI_Win_create(get_sbuf(), allocated_size_send, dtsize, MPI_INFO_NULL,
+                           MPI_COMM_WORLD, &win_send);
+            MPI_Win_create(get_rbuf(), allocated_size_recv, dtsize, MPI_INFO_NULL,
+                           MPI_COMM_WORLD, &win_recv);
+        }
     }
 
     void AsyncBenchmark_rma_ipt2pt::init() {
@@ -187,10 +196,12 @@ namespace async_suite {
         auto dests = topo->ranks_to_recv_from();
         comm_size = std::max(sources.size(), dests.size());
         AsyncBenchmark::alloc();
-        MPI_Win_create(get_sbuf(), allocated_size_send, dtsize, MPI_INFO_NULL,
-                       MPI_COMM_WORLD, &win_send);
-        MPI_Win_create(get_rbuf(), allocated_size_recv, dtsize, MPI_INFO_NULL,
-                       MPI_COMM_WORLD, &win_recv);
+        if (topo->is_active()) {
+            MPI_Win_create(get_sbuf(), allocated_size_send, dtsize, MPI_INFO_NULL,
+                           MPI_COMM_WORLD, &win_send);
+            MPI_Win_create(get_rbuf(), allocated_size_recv, dtsize, MPI_INFO_NULL,
+                           MPI_COMM_WORLD, &win_recv);
+        }
     }
 
     void AsyncBenchmark_allreduce::init() {
