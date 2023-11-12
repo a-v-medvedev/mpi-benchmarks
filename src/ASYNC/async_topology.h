@@ -310,7 +310,7 @@ struct topo_halo : public topohelper {
         actions_t peers;
         if (!is_active())
             return peers;
-        peers.resize(ndims * (bidirectional ? 2 : 1));
+        peers.resize(ndims * 2 * (bidirectional ? 2 : 1));
         std::vector<unsigned int> mysubs = ranktosubs(rank);
 		// chess coloring flag
         bool flag = (rank % 2 ? false : true);
@@ -337,7 +337,7 @@ struct topo_halo : public topohelper {
             p += 2;
         }
         if (bidirectional) {
-            size_t n = peers.size();
+            size_t n = ndims * 2;
             for (size_t i = 0; i < n; i++) {
                 auto p = peers[i];
                 if (p.action == action_t::RECV) {
@@ -345,7 +345,7 @@ struct topo_halo : public topohelper {
                 } else {
                     p.action = action_t::RECV;
                 }
-                peers.push_back(p);
+                peers[i + n] = p;
             }
         }
         return peers;

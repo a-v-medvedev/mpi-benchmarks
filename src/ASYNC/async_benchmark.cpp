@@ -150,6 +150,13 @@ namespace async_suite {
                                            dests.size(), dests.data(), (const int *)MPI_UNWEIGHTED,
                                            MPI_INFO_NULL, true,
                                            &graph_comm);
+        } else {
+            MPI_Dist_graph_create_adjacent(MPI_COMM_WORLD,
+                                           0, nullptr, (const int *)MPI_UNWEIGHTED,
+                                           0, nullptr, (const int *)MPI_UNWEIGHTED,
+                                           MPI_INFO_NULL, true,
+                                           &graph_comm);
+           
         }
     }
 
@@ -166,6 +173,12 @@ namespace async_suite {
             MPI_Dist_graph_create_adjacent(MPI_COMM_WORLD,
                                            sources.size(), sources.data(), (const int *)MPI_UNWEIGHTED,
                                            dests.size(), dests.data(), (const int *)MPI_UNWEIGHTED,
+                                           MPI_INFO_NULL, true,
+                                           &graph_comm);
+        } else {
+            MPI_Dist_graph_create_adjacent(MPI_COMM_WORLD,
+                                           0, nullptr, (const int *)MPI_UNWEIGHTED,
+                                           0, nullptr, (const int *)MPI_UNWEIGHTED,
                                            MPI_INFO_NULL, true,
                                            &graph_comm);
         }
@@ -674,6 +687,15 @@ namespace async_suite {
         tover_comm = 0;
         tover_calc = 0;
         if (!topo->is_active()) {
+            for (int i = 0; i < ncycles + nwarmup; i++) {
+                barrier(rank, np, graph_comm);
+#if ASYNC_EXTRA_BARRIER
+                barrier(rank, np, graph_comm);
+                barrier(rank, np, graph_comm);
+                barrier(rank, np, graph_comm);
+                barrier(rank, np, graph_comm);
+#endif
+            }
             MPI_Barrier(MPI_COMM_WORLD);
             return false;
         }
@@ -708,6 +730,15 @@ namespace async_suite {
     bool AsyncBenchmark_ina2a::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
                                          double &time, double &tover_comm, double &tover_calc) {         
         if (!topo->is_active()) {
+            for (int i = 0; i < ncycles + nwarmup; i++) {
+                barrier(rank, np, graph_comm);
+#if ASYNC_EXTRA_BARRIER
+                barrier(rank, np, graph_comm);
+                barrier(rank, np, graph_comm);
+                barrier(rank, np, graph_comm);
+                barrier(rank, np, graph_comm);
+#endif
+            }
             MPI_Barrier(MPI_COMM_WORLD);
             return false;
         }
