@@ -141,46 +141,6 @@ namespace async_suite {
         DEFINE_INHERITED(AsyncBenchmark_calibration, BenchmarkSuite<BS_GENERIC>);
     };
 
-    class AsyncBenchmark_allreduce : public AsyncBenchmark {
-        public:
-        MPI_Comm coll_comm;
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_allreduce, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_iallreduce : public AsyncBenchmark {
-        public:
-        MPI_Comm coll_comm;
-        AsyncBenchmark_calc calc;
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_iallreduce, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_alltoall : public AsyncBenchmark {
-        public:
-        MPI_Comm coll_comm;
-        int comm_size = 0;
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_alltoall, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_ialltoall : public AsyncBenchmark {
-        public:
-        MPI_Comm coll_comm;
-        int comm_size = 0;
-        AsyncBenchmark_calc calc;
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_ialltoall, BenchmarkSuite<BS_GENERIC>);
-    };
-
     class AsyncBenchmark_na2a : public AsyncBenchmark {
         public:
         MPI_Comm graph_comm;
