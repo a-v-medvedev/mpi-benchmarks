@@ -38,11 +38,9 @@
 */
 
 #include <thread>
-#include <vector>
 #include "async_benchmark.h"
 #include "async_sys.h"
 #include "async_average.h"
-#include "async_params.h"
 #include "async_topology.h"
 #include "async_yaml.h"
 #include "async_cuda.h"
@@ -123,6 +121,21 @@ namespace async_suite {
     AsyncBenchmark::~AsyncBenchmark() {
     }
 
+    void AsyncBenchmark_pt2pt::init() {
+        GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
+        AsyncBenchmark::init();
+        topo = topohelper::create(p.get("pt2pt"), np, rank);
+        AsyncBenchmark::alloc();
+    }
+
+    void AsyncBenchmark_ipt2pt::init() {
+        GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
+        AsyncBenchmark::init();
+        calc.init();
+        topo = topohelper::create(p.get("pt2pt"), np, rank);
+        AsyncBenchmark::alloc();
+    }
+
     void AsyncBenchmark_na2a::init() {
         GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
         AsyncBenchmark::init();
@@ -171,6 +184,39 @@ namespace async_suite {
         }
     }
    
+    void AsyncBenchmark_rma_pt2pt::init() {
+        GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
+        AsyncBenchmark::init();
+        topo = topohelper::create(p.get("rma_pt2pt"), np, rank);
+        auto sources = topo->ranks_to_send_to();
+        auto dests = topo->ranks_to_recv_from();
+        comm_size = std::max(sources.size(), dests.size());
+        AsyncBenchmark::alloc();
+        if (topo->is_active()) {
+            MPI_Win_create(get_sbuf(), allocated_size_send, dtsize, MPI_INFO_NULL,
+                           MPI_COMM_WORLD, &win_send);
+            MPI_Win_create(get_rbuf(), allocated_size_recv, dtsize, MPI_INFO_NULL,
+                           MPI_COMM_WORLD, &win_recv);
+        }
+    }
+
+    void AsyncBenchmark_rma_ipt2pt::init() {
+        GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
+        AsyncBenchmark::init();
+        calc.init();
+        topo = topohelper::create(p.get("rma_pt2pt"), np, rank);
+        auto sources = topo->ranks_to_send_to();
+        auto dests = topo->ranks_to_recv_from();
+        comm_size = std::max(sources.size(), dests.size());
+        AsyncBenchmark::alloc();
+        if (topo->is_active()) {
+            MPI_Win_create(get_sbuf(), allocated_size_send, dtsize, MPI_INFO_NULL,
+                           MPI_COMM_WORLD, &win_send);
+            MPI_Win_create(get_rbuf(), allocated_size_recv, dtsize, MPI_INFO_NULL,
+                           MPI_COMM_WORLD, &win_recv);
+        }
+    }
+
     void AsyncBenchmark_allreduce::init() {
         GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
         AsyncBenchmark::init();
@@ -312,7 +358,6 @@ namespace async_suite {
     void AsyncBenchmark::finalize() { 
         GET_PARAMETER(YAML::Emitter, yaml_out);
         GET_PARAMETER(std::string, yaml_outfile);
-        GET_PARAMETER(sys::host_alloc_t, host_alloc_mode);
         YamlOutputMaker yaml_tmin("tmin");
         YamlOutputMaker yaml_tmax("tmax");
         YamlOutputMaker yaml_tavg("tavg");
@@ -374,6 +419,98 @@ namespace async_suite {
         sys::host_mem_free(host_rbuf, host_alloc_mode);
         sys::device_mem_free(device_sbuf, sys::device_alloc_t::DA_CUDA);
         sys::device_mem_free(device_rbuf, sys::device_alloc_t::DA_CUDA);
+    }
+
+    bool AsyncBenchmark_pt2pt::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
+                                         double &time, double &tover_comm, double &tover_calc) {
+        tover_comm = 0;
+        tover_calc = 0;
+        if (!topo->is_active()) {
+            MPI_Barrier(MPI_COMM_WORLD);
+            return false;
+        }
+        size_t b = get_send_bufsize_for_len(count);
+        double t1 = 0, t2 = 0;
+        const int tag = 1;
+        auto comm_actions = topo->comm_actions();
+        for (int i = 0; i < ncycles + nwarmup; i++) {
+            if (i == nwarmup) t1 = MPI_Wtime();
+            for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
+                int rank = comm_actions[commstage].rank;
+                if (comm_actions[commstage].action == action_t::SEND) {
+                    sync_sbuf_with_device(i, b);
+                    MPI_Send(get_sbuf(i, b), count, datatype, rank, tag, MPI_COMM_WORLD);
+                } else if (comm_actions[commstage].action == action_t::RECV) {
+                    MPI_Recv(get_rbuf(i, b), count, datatype, rank, MPI_ANY_TAG, 
+                             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    sync_rbuf_with_device(i, b);
+                }
+            }
+        }
+        t2 = MPI_Wtime();
+        time = (t2 - t1) / ncycles;
+        MPI_Barrier(MPI_COMM_WORLD);
+        results[count] = result { true, time, 0.0, 0.0, ncycles };
+        return true;
+    }
+
+    bool AsyncBenchmark_ipt2pt::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
+                                          double &time, double &tover_comm, double &tover_calc) {
+        if (!topo->is_active()) {
+            MPI_Barrier(MPI_COMM_WORLD);
+            return false;
+        }
+        size_t b = get_send_bufsize_for_len(count);
+        double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0, 
+                                              local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
+        const int tag = 1;
+        auto comm_actions = topo->comm_actions();
+        calc.num_requests = topo->get_num_actions();
+        if (calc.num_requests > MAX_REQUESTS_NUM) {
+            throw std::runtime_error("AsyncBenchmark_ipt2pt: MAX_REQUESTS_NUM is too little for the topology");         
+        }
+        MPI_Request *requests;
+        requests = (MPI_Request *)calloc(sizeof(MPI_Request), calc.num_requests);
+        calc.reqs = requests;
+        for (int i = 0; i < ncycles + nwarmup; i++) {
+            int nr = 0;
+            for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
+                int rank = comm_actions[commstage].rank;
+                if (i == nwarmup) t1 = MPI_Wtime();
+                if (comm_actions[commstage].action == action_t::SEND) {
+                    sync_sbuf_with_device(i, b);
+                    MPI_Isend(get_sbuf(i, b), count, datatype, rank, tag, MPI_COMM_WORLD, 
+                              &requests[nr++]);
+                } else if (comm_actions[commstage].action == action_t::RECV) {
+                    MPI_Irecv(get_rbuf(i, b), count, datatype, rank, MPI_ANY_TAG, MPI_COMM_WORLD, 
+                              &requests[nr++]);
+                }
+            }
+            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
+            
+            if (i >= nwarmup) {
+                total_ctime += local_ctime;
+                total_tover_comm += local_tover_comm;
+                total_calc_slowdown_ratio += local_calc_slowdown_ratio;
+            }
+            MPI_Waitall(calc.num_requests, requests, MPI_STATUSES_IGNORE);
+            for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
+                if (comm_actions[commstage].action == action_t::RECV) {
+                    sync_rbuf_with_device(i, b);
+                }
+            }
+        }
+        t2 = MPI_Wtime();
+        time = (t2 - t1) / ncycles;
+        time_calc = total_ctime / ncycles;
+        tover_comm = total_tover_comm / ncycles;
+        double calc_slowdown_ratio = total_calc_slowdown_ratio / ncycles;
+        double time_comm = time - time_calc;
+        tover_calc = time_comm * calc_slowdown_ratio;
+        MPI_Barrier(MPI_COMM_WORLD);
+        free(requests);
+        results[count] = result { true, time, time_comm + tover_comm, tover_calc, ncycles };
+        return true;
     }
 
     bool AsyncBenchmark_allreduce::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
@@ -649,6 +786,143 @@ namespace async_suite {
         return true;
     }
 
+    bool AsyncBenchmark_rma_pt2pt::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
+                                             double &time, double &tover_comm, double &tover_calc) {
+        if (!topo->is_active()) {
+            MPI_Barrier(MPI_COMM_WORLD);
+            return false;
+        }
+        tover_comm = 0;
+        tover_calc = 0;
+        size_t b = get_send_bufsize_for_len(count);
+        double t1 = 0, t2 = 0;
+        auto comm_actions = topo->comm_actions();
+        for (int i = 0; i < ncycles + nwarmup; i++) {
+            if (i == nwarmup) t1 = MPI_Wtime();
+            sync_sbuf_with_device(i, b);
+            for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
+                int ns = 0, nr = 0;
+                int rank = comm_actions[commstage].rank;
+                size_t off = (get_sbuf(i, b) - get_sbuf()) / dtsize;
+                if (comm_actions[commstage].action == action_t::RECV) {
+                    MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win_recv);
+                    MPI_Get(get_rbuf(i, b, nr++), count, datatype, rank, off, count, datatype, win_recv);
+                    MPI_Win_unlock(rank, win_recv);
+                } else if (comm_actions[commstage].action == action_t::SEND) {
+                    MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win_send);
+                    MPI_Put(get_sbuf(i, b, ns++), count, datatype, rank, off, count, datatype, win_send);
+                    MPI_Win_unlock(rank, win_send);
+                }
+            }
+            sync_rbuf_with_device(i, b);
+        }
+        t2 = MPI_Wtime();
+        time = (t2 - t1) / ncycles;
+        MPI_Barrier(MPI_COMM_WORLD);
+        results[count] = result { true, time, 0.0, 0.0, ncycles };
+        return true;
+    }
+
+    bool AsyncBenchmark_rma_ipt2pt::benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, 
+                                              double &time, double &tover_comm, double &tover_calc) {
+        if (!topo->is_active()) {
+            MPI_Barrier(MPI_COMM_WORLD);
+            return false;
+        }
+        size_t b = get_send_bufsize_for_len(count);
+        double t1 = 0, t2 = 0, time_calc = 0, total_ctime = 0, total_tover_comm = 0, total_calc_slowdown_ratio = 0,
+                                              local_ctime = 0, local_tover_comm = 0, local_calc_slowdown_ratio = 0;
+        auto comm_actions = topo->comm_actions();
+        MPI_Request *requests;
+        requests = (MPI_Request *)calloc(sizeof(MPI_Request), topo->get_num_actions());
+        calc.reqs = requests;
+        calc.num_requests = topo->get_num_actions();
+        using status_and_num_t = std::pair<bool, int>;
+        std::map<int, status_and_num_t> lock_ranks;
+        struct peer_data {
+            std::map<int, status_and_num_t> lock_ranks;
+            size_t n = 0;
+            MPI_Win *win_ptr = nullptr;
+            void init(MPI_Win &win, const std::vector<int> &ranks) {
+                for (auto r : ranks) {
+                    lock_ranks[r] = status_and_num_t {false, 0};
+                }
+                win_ptr = &win;
+            }
+            int lock_if_needed(int r, bool *result_ptr = nullptr) {
+                assert(win_ptr);
+                assert(lock_ranks.find(r) != lock_ranks.end());
+                auto &status_and_num = lock_ranks[r];
+                if (!status_and_num.first) {
+                    MPI_Win_lock(MPI_LOCK_SHARED, r, 0, *win_ptr);
+                    lock_ranks[r] = status_and_num_t { true, n };
+                    if (result_ptr)
+                        *result_ptr = true;
+                    return n++;
+                }
+                if (result_ptr)
+                    *result_ptr = false;
+                return status_and_num.second;
+            }
+            int unlock_all() {
+                assert(win_ptr);
+                for (auto &it : lock_ranks) {
+                    auto &status_and_num = it.second;
+                    if (status_and_num.first) {
+                        MPI_Win_unlock(it.first, *win_ptr);
+                        status_and_num = status_and_num_t { false, 0 };
+                    }
+                }
+                int retval = n;
+                n = 0;
+                return retval;
+            }
+        } sendinfo, recvinfo;
+        auto ranks_recv = topo->ranks_to_recv_from();
+        auto ranks_send = topo->ranks_to_send_to();
+        sendinfo.init(win_send, ranks_send);
+        recvinfo.init(win_recv, ranks_recv);
+        for (int i = 0; i < ncycles + nwarmup; i++) {
+            size_t off = (get_sbuf(i, b) - get_sbuf()) / dtsize;
+            if (i == nwarmup) t1 = MPI_Wtime();
+            int nreq = 0;
+            sync_sbuf_with_device(i, b);
+            for (size_t commstage = 0; commstage < comm_actions.size(); commstage++) {
+                int r = comm_actions[commstage].rank;
+                if (comm_actions[commstage].action == action_t::RECV) {
+                    int n = recvinfo.lock_if_needed(r);
+                    MPI_Rget(get_rbuf(i, b, n), count, datatype, r, off, 
+                             count, datatype, win_recv, &requests[nreq++]);
+                } else if (comm_actions[commstage].action == action_t::SEND) {
+                    int n = sendinfo.lock_if_needed(r);
+                    MPI_Rput(get_sbuf(i, b, n), count, datatype, r, off, 
+                             count, datatype, win_send, &requests[nreq++]);
+                }
+            }
+            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
+            MPI_Waitall(calc.num_requests, requests, MPI_STATUSES_IGNORE);
+            sendinfo.unlock_all();
+            recvinfo.unlock_all();
+            sync_rbuf_with_device(i, b);
+            if (i >= nwarmup) {
+                total_ctime += local_ctime;
+                total_tover_comm += local_tover_comm;
+                total_calc_slowdown_ratio += local_calc_slowdown_ratio;
+            }
+        }
+        t2 = MPI_Wtime();
+        time = (t2 - t1) / ncycles;
+        time_calc = total_ctime / ncycles;
+        tover_comm = total_tover_comm / ncycles;
+        double calc_slowdown_ratio = total_calc_slowdown_ratio / ncycles;
+        double time_comm = time - time_calc;
+        tover_calc = time_comm * calc_slowdown_ratio;
+        MPI_Barrier(MPI_COMM_WORLD);
+        free(requests);
+        results[count] = result { true, time, time_comm + tover_comm, tover_calc, ncycles };
+        return true;
+    }
+
     void AsyncBenchmark_calc::gpu_calc_loop() {
 #ifdef WITH_CUDA                
         if (!is_gpu_calculations)
@@ -805,7 +1079,6 @@ namespace async_suite {
         AsyncBenchmark::init();
         GET_PARAMETER(std::vector<int>, calctime);
         GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
-        GET_PARAMETER(std::vector<int>, len);
         if (p.find("workload")) {
             is_cpu_calculations = p.get("workload").get_bool("cpu_calculations");
             is_gpu_calculations = p.get("workload").get_bool("gpu_calculations");
@@ -993,12 +1266,16 @@ namespace async_suite {
     }
 
 
+    DECLARE_INHERITED(AsyncBenchmark_pt2pt, sync_pt2pt)
+    DECLARE_INHERITED(AsyncBenchmark_ipt2pt, async_pt2pt)
     DECLARE_INHERITED(AsyncBenchmark_allreduce, sync_allreduce)
     DECLARE_INHERITED(AsyncBenchmark_iallreduce, async_allreduce)
     DECLARE_INHERITED(AsyncBenchmark_alltoall, sync_alltoall)
     DECLARE_INHERITED(AsyncBenchmark_ialltoall, async_alltoall)
     DECLARE_INHERITED(AsyncBenchmark_na2a, sync_na2a)
     DECLARE_INHERITED(AsyncBenchmark_ina2a, async_na2a)
+    DECLARE_INHERITED(AsyncBenchmark_rma_pt2pt, sync_rma_pt2pt)
+    DECLARE_INHERITED(AsyncBenchmark_rma_ipt2pt, async_rma_pt2pt)
     DECLARE_INHERITED(AsyncBenchmark_calc, workload)
     DECLARE_INHERITED(AsyncBenchmark_calibration, calc_calibration)
 }

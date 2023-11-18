@@ -89,9 +89,9 @@ all: $(BINARY)
 IMB_SRC = imb.cpp scope.cpp
 IMB_OBJ = $(IMB_SRC:.cpp=.o) 
 
-BECHMARK_SUITE_SRC += benchmark_suites_collection.cpp
-BECHMARK_SUITE_OBJ1 = $(BECHMARK_SUITE_SRC:.cpp=.o)
-BECHMARK_SUITE_OBJ = $(BECHMARK_SUITE_OBJ1:.cu=.o)
+BENCHMARK_SUITE_SRC += benchmark_suites_collection.cpp
+BENCHMARK_SUITE_OBJ1 = $(BENCHMARK_SUITE_SRC:.cpp=.o)
+BENCHMARK_SUITE_OBJ = $(BENCHMARK_SUITE_OBJ1:.cu=.o)
 
 HEADERS += benchmark.h \
 benchmark_suite_base.h \
@@ -106,10 +106,10 @@ announce:
 
 ifeq ($(WITH_CUDA),TRUE)
 NVLDFLAGS=$(shell echo $(LDFLAGS) | sed 's/-Wl,/-Xlinker /g')
-$(BINARY): $(IMB_OBJ) $(BECHMARK_SUITE_OBJ) $(ADDITIONAL_OBJ) 
+$(BINARY): $(IMB_OBJ) $(BENCHMARK_SUITE_OBJ) $(ADDITIONAL_OBJ) 
 	$(NV_CXX) -ccbin `which $(CXX)` $(CPPFLAGS) -o $@ $^ $(NVLDFLAGS)
 else
-$(BINARY): $(IMB_OBJ) $(BECHMARK_SUITE_OBJ) $(ADDITIONAL_OBJ) 
+$(BINARY): $(IMB_OBJ) $(BENCHMARK_SUITE_OBJ) $(ADDITIONAL_OBJ) 
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 endif	
 
@@ -123,10 +123,10 @@ endif
 	$(NV_CXX) $(CPPFLAGS) -O0 -g -c -o $@ $<
 
 clean: announce
-	rm -f $(IMB_OBJ) $(BECHMARK_SUITE_OBJ) $(ADDITIONAL_OBJ) $(BINARY) 
+	rm -f $(IMB_OBJ) $(BENCHMARK_SUITE_OBJ) $(ADDITIONAL_OBJ) $(BINARY) 
 
 
-$(BECHMARK_SUITE_OBJ): $(HEADERS) Makefile
+$(BENCHMARK_SUITE_OBJ): $(HEADERS) Makefile
 $(IMB_OBJ): $(HEADERS) Makefile
 
 .PHONY: announce clean all

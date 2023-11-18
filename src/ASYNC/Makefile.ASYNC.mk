@@ -37,11 +37,13 @@
 override CPPFLAGS += -DASYNC
 override CPPFLAGS += -IASYNC -D__USE_BSD
 
-BECHMARK_SUITE_SRC += ASYNC/async_benchmark.cpp ASYNC/async_alloc.cpp ASYNC/async_sys.cpp
+BENCHMARK_SUITE_SRC += ASYNC/async_suite.cpp ASYNC/async_benchmark.cpp ASYNC/async_params.cpp ASYNC/async_topology.cpp
+BENCHMARK_SUITE_SRC += ASYNC/async_alloc.cpp ASYNC/async_sys.cpp 
+BENCHMARK_SUITE_SRC += ASYNC/async_pt2pt.cpp ASYNC/async_rma.cpp
 ifeq ($(WITH_CUDA),TRUE)
 override CPPFLAGS += -DWITH_CUDA
 override LDFLAGS += -lcuda
-BECHMARK_SUITE_SRC += ASYNC/async_cuda.cu ASYNC/async_mpi.cpp
+BENCHMARK_SUITE_SRC += ASYNC/async_cuda.cu ASYNC/async_mpi.cpp
 endif
 
 override CXXFLAGS += -IASYNC/thirdparty/argsparser.bin -IASYNC/thirdparty/yaml-cpp.bin/include

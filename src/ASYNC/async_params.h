@@ -48,7 +48,6 @@
 
 #include "argsparser.h"
 #include "extensions/params/params.h"
-#include "extensions/params/params.inl"
 
 namespace params {
 
@@ -65,6 +64,8 @@ namespace params {
     static std::string get_family_key() { return FAMILY_KEY; } \
     static std::string get_layer_prefix() { return "-"; } \
     static uint16_t get_nlayers() { return 1; } \
+    static std::ostream *poutput; \
+    static void set_output(std::ostream &output) { poutput = &output; } \
     static void print_stream(const std::stringstream &ss) { \
         std::stringstream my_ss(ss.str()); \
         std::string line; \
@@ -86,15 +87,9 @@ namespace params {
 
 #define END_DETAILS() };
 
-// FIXME Replace {"pt2pt", "allreduce", "rma_pt2pt", "na2a"} with {"!workload", "!calc_calibration"}?
-//#define ONLYBENCHS {"pt2pt", "allreduce", "rma_pt2pt", "na2a"}
-
 BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
-    static std::ostream *poutput;
-    static void set_output(std::ostream &output) { poutput = &output; }
     static const params::expected_params_t &get_expected_params() {
         using namespace params;
-        //static const std::vector<std::string> ONLYBENCHS = {"pt2pt", "allreduce", "rma_pt2pt", "na2a"};
         static const std::vector<std::string> ONLYBENCHS = {"!workload", "!calc_calibration"};
         static const expected_params_t expected_params = {
             {"component_details:",  {value::S, NONCHANGEABLE, ALLFAMILIES,  NOMINMAX,   ALLALLOWED}},
@@ -172,8 +167,6 @@ BEGIN_DETAILS_DICT(benchmarks_params, "component_details:")
         (void)dict;
     }
 END_DETAILS()
-
-std::ostream *benchmarks_params::poutput = nullptr;
 
 }
 
