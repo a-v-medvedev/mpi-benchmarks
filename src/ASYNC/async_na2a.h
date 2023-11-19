@@ -39,208 +39,31 @@
 #pragma once
 
 #include "async_suite.h"
-
-class topohelper;
+#include "async_benchmark.h"
+#include "async_workload.h"
 
 namespace async_suite {
-    static constexpr size_t ASSUMED_CACHE_SIZE = 4 * 1024 * 1024;
-    static constexpr int MAX_REQUESTS_NUM = 10;
-    static constexpr size_t CALC_MATRIX_SIZE = 5;
-    class AsyncBenchmark : public Benchmark {
-        public:
-        struct result {
-            bool done;
-            double time;
-            double overhead_comm;
-	        double overhead_calc;
-            int ncycles;
-        };
-        bool is_gpu = false;
-        bool is_cuda_aware = false;
-        std::map<int, result> results;
-        char *host_sbuf = nullptr, *host_rbuf = nullptr;
-        char *device_sbuf = nullptr, *device_rbuf = nullptr;
-        int np = 0, rank = 0;
-        std::shared_ptr<topohelper> topo;
-        size_t allocated_size_send = 0;
-        size_t allocated_size_recv = 0;
-        int dtsize = 0;
-        public:
-        virtual void init() override;
-        void alloc();
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) = 0;
-        virtual void run(const scope_item &item) override; 
-        virtual void finalize() override;
-        virtual size_t buf_size_multiplier_send() { return 1; }
-        virtual size_t buf_size_multiplier_recv() { return 1; }
-        size_t get_send_bufsize_for_len(size_t len);
-        size_t get_recv_bufsize_for_len(size_t len);
-
-        void setup_the_gpu_rank();
-
-        char *get_sbuf();
-        char *get_rbuf();
-        char *get_sbuf(size_t i, size_t b, size_t block = 0);
-        char *get_rbuf(size_t i, size_t b, size_t block = 0);
-        void sync_sbuf_with_device(size_t i, size_t off);
-        void sync_rbuf_with_device(size_t i, size_t off);
-            
-        AsyncBenchmark() {}
-        virtual ~AsyncBenchmark(); 
-    };
-
-    class AsyncBenchmark_calc : public AsyncBenchmark {
-        public:
-        MPI_Request *reqs = nullptr;
-        int stat[MAX_REQUESTS_NUM];
-        int total_tests = 0;
-        int successful_tests = 0;
-        int num_requests = 0;
-        bool is_manual_progress = false;
-        bool is_cpu_calculations = false;
-        bool is_gpu_calculations = false;
-        bool is_omit_calculation_loop = false;
-        bool is_omit_calulation_overhead_estimation = false;
-
-        int gpu_workload_calibration = 0;
-        char *host_transfer_buf = nullptr; 
-        char *device_transfer_buf = nullptr; 
-        size_t gpu_workload_ncycles = 1;
-        size_t gpu_workload_transfer_size = 1024;
-        bool gpu_calc_cycle_active = false;
-        bool gpu_calc_cycle_finish = false;
-        std::thread *p_tgpucalc = nullptr;
-        
-        std::map<int, int> calctime_by_len;
-        int cycles_per_10usec = 0; 
-        int cycles_per_10usec_avg = 0, cycles_per_10usec_min = 0, cycles_per_10usec_max = 0;
-        int irregularity_level = 0;
-        float a[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], b[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], 
-              c[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], x[CALC_MATRIX_SIZE], y[CALC_MATRIX_SIZE];
-        void calc_and_progress_loop(int ncycles, int iters_till_test, double &tover_comm);
-        void calc_loop(int ncycles, double &tover_comm);
-        void calc_loop(int ncalccycles);
-        void gpu_calc_loop();
-        public:
-        void calibration();
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        virtual bool is_default() override { return false; }
-        virtual void finalize() override;
-        DEFINE_INHERITED(AsyncBenchmark_calc, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_calibration : public Benchmark {
-        AsyncBenchmark_calc calc;
-        int np = 0, rank = 0;
-        public:
-        virtual void init() override;
-        virtual void run(const scope_item &item) override; 
-        virtual void finalize() override;
-        virtual bool is_default() override { return false; }
-        DEFINE_INHERITED(AsyncBenchmark_calibration, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_pt2pt : public AsyncBenchmark {
-        public:
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_pt2pt, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_ipt2pt : public AsyncBenchmark {
-        public:
-        AsyncBenchmark_calc calc;
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_ipt2pt, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_allreduce : public AsyncBenchmark {
-        public:
-        MPI_Comm coll_comm;
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_allreduce, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_iallreduce : public AsyncBenchmark {
-        public:
-        MPI_Comm coll_comm;
-        AsyncBenchmark_calc calc;
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_iallreduce, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_alltoall : public AsyncBenchmark {
-        public:
-        MPI_Comm coll_comm;
-        int comm_size = 0;
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_alltoall, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_ialltoall : public AsyncBenchmark {
-        public:
-        MPI_Comm coll_comm;
-        int comm_size = 0;
-        AsyncBenchmark_calc calc;
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_ialltoall, BenchmarkSuite<BS_GENERIC>);
-    };
-
-    class AsyncBenchmark_na2a : public AsyncBenchmark {
+    class AsyncBenchmark_na2a_base : public AsyncBenchmark {
         public:
         MPI_Comm graph_comm;
         int comm_size = 0;
         virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
         virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
+        virtual void init() override;
+    };
+
+    class AsyncBenchmark_na2a : public AsyncBenchmark_na2a_base {
+        public:
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         DEFINE_INHERITED(AsyncBenchmark_na2a, BenchmarkSuite<BS_GENERIC>);
-
     };
 
-    class AsyncBenchmark_ina2a : public AsyncBenchmark {
+    class AsyncBenchmark_ina2a : public AsyncBenchmark_na2a_base {
         public:
-        AsyncBenchmark_calc calc;
-        MPI_Comm graph_comm;
-        int comm_size = 0;
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
+        AsyncBenchmark_workload calc;
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         DEFINE_INHERITED(AsyncBenchmark_ina2a, BenchmarkSuite<BS_GENERIC>);
-    };
- 
-    class AsyncBenchmark_rma_pt2pt : public AsyncBenchmark {
-        public:
-        MPI_Win win_send, win_recv;
-        int comm_size = 0;
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_rma_pt2pt, BenchmarkSuite<BS_GENERIC>);
-
-    };
-
-    class AsyncBenchmark_rma_ipt2pt : public AsyncBenchmark {
-        public:
-        AsyncBenchmark_calc calc;
-        MPI_Win win_send, win_recv;
-        int comm_size = 0;
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
-        virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_rma_ipt2pt, BenchmarkSuite<BS_GENERIC>);
     };
 }

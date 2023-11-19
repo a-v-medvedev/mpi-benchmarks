@@ -41,34 +41,9 @@
 
 #include "async_suite.h"
 #include "async_benchmark.h"
+#include "async_workload.h"
 
 namespace async_suite {
-
-#ifndef ASYNC_EXTRA_BARRIER
-#define ASYNC_EXTRA_BARRIER 0
-#endif
-
-    static void barrier(int rank, int np, const MPI_Comm &comm = MPI_COMM_WORLD) {
-#if !ASYNC_EXTRA_BARRIER
-        (void)rank;
-        (void)np;
-        MPI_Barrier(comm);
-#else
-        // Explicit implementation of dissemenation barrier algorithm -- if we are not sure the
-        // standard MPI_Barrier() is "strong" and "symmetric" enough.
-        int mask = 0x1;
-        int dst, src;
-        int tmp = 0;
-        for (; mask < np; mask <<= 1) {
-            dst = (rank + mask) % np;
-            src = (rank - mask + np) % np;
-            MPI_Sendrecv(&tmp, 0, MPI_BYTE, dst, 1010,
-                         &tmp, 0, MPI_BYTE, src, 1010,
-                         comm, MPI_STATUS_IGNORE);
-        }
-#endif
-    }
-    
     class AsyncBenchmark_allreduce_base : public AsyncBenchmark {
         public:
         MPI_Comm coll_comm;
@@ -84,7 +59,7 @@ namespace async_suite {
 
     class AsyncBenchmark_iallreduce : public AsyncBenchmark_allreduce_base {
         public:
-        AsyncBenchmark_calc calc;
+        AsyncBenchmark_workload calc;
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         DEFINE_INHERITED(AsyncBenchmark_iallreduce, BenchmarkSuite<BS_GENERIC>);

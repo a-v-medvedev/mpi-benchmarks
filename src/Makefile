@@ -57,32 +57,16 @@ NV_CXX ?= nvcc
 override CPPFLAGS += -I.
 
 
-#override CFLAGS += -O2 -Wall -Wno-long-long
-#override CXXFLAGS += -O2 -Wall -Wextra -pedantic -Wno-long-long -std=c++11
+override CFLAGS += -O1 -Wall -Wno-long-long
+override CXXFLAGS += -O1 -Wall -Wextra -pedantic -Wno-long-long -std=c++11
 
-override CFLAGS += -O2 -g -Wall -Wno-long-long
-override CXXFLAGS += -O2 -g -Wall -Wextra -pedantic -Wno-long-long -std=c++11
+#override CFLAGS += -O0 -g -Wall -Wno-long-long
+#override CXXFLAGS += -O0 -g -Wall -Wextra -pedantic -Wno-long-long -std=c++11
 
 ifdef WITH_OPENMP
 override CFLAGS += -fopenmp
 override CXXFLAGS += -fopenmp
 endif
-
-#ifeq ($(origin CC),default)
-#CXX=mpicc
-#endif
-#ifeq ($(origin CXX),default)
-#CC=mpicxx
-#endif
-#override CPPFLAGS += -I.
-#override CFLAGS = -g -Wall -Wextra -pedantic -Wno-long-long
-#CXXFLAGS = -g -Wall -Wextra -pedantic -Wno-long-long
-#ifdef WITH_OPENMP
-#override CFLAGS += -qopenmp
-#override CXXFLAGS += -qopenmp
-#endif
-
-
 
 all: $(BINARY)
 

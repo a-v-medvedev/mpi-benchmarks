@@ -36,30 +36,64 @@
   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
   POSSIBILITY OF SUCH DAMAGE.
 */
+
 #pragma once
 
 #include "async_suite.h"
 #include "async_benchmark.h"
-#include "async_workload.h"
+
+class topohelper;
 
 namespace async_suite {
-    class AsyncBenchmark_pt2pt_base : public AsyncBenchmark {
+    class AsyncBenchmark_workload : public AsyncBenchmark {
         public:
-        virtual void init() override;
-    };
+        MPI_Request *reqs = nullptr;
+        int stat[MAX_REQUESTS_NUM];
+        int total_tests = 0;
+        int successful_tests = 0;
+        int num_requests = 0;
+        bool is_manual_progress = false;
+        bool is_cpu_calculations = false;
+        bool is_gpu_calculations = false;
+        bool is_omit_calculation_loop = false;
+        bool is_omit_calulation_overhead_estimation = false;
 
-    class AsyncBenchmark_pt2pt : public AsyncBenchmark_pt2pt_base {
+        int gpu_workload_calibration = 0;
+        char *host_transfer_buf = nullptr; 
+        char *device_transfer_buf = nullptr; 
+        size_t gpu_workload_ncycles = 1;
+        size_t gpu_workload_transfer_size = 1024;
+        bool gpu_calc_cycle_active = false;
+        bool gpu_calc_cycle_finish = false;
+        std::thread *p_tgpucalc = nullptr;
+        
+        std::map<int, int> calctime_by_len;
+        int cycles_per_10usec = 0; 
+        int cycles_per_10usec_avg = 0, cycles_per_10usec_min = 0, cycles_per_10usec_max = 0;
+        int irregularity_level = 0;
+        float a[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], b[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], 
+              c[CALC_MATRIX_SIZE][CALC_MATRIX_SIZE], x[CALC_MATRIX_SIZE], y[CALC_MATRIX_SIZE];
+        void calc_and_progress_loop(int ncycles, int iters_till_test, double &tover_comm);
+        void calc_loop(int ncycles, double &tover_comm);
+        void calc_loop(int ncalccycles);
+        void gpu_calc_loop();
         public:
+        void calibration();
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_pt2pt, BenchmarkSuite<BS_GENERIC>);
+        virtual bool is_default() override { return false; }
+        virtual void finalize() override;
+        DEFINE_INHERITED(AsyncBenchmark_workload, BenchmarkSuite<BS_GENERIC>);
     };
 
-    class AsyncBenchmark_ipt2pt : public AsyncBenchmark_pt2pt_base {
-        public:
+    class AsyncBenchmark_calibration : public Benchmark {
         AsyncBenchmark_workload calc;
+        int np = 0, rank = 0;
+        public:
         virtual void init() override;
-        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
-        DEFINE_INHERITED(AsyncBenchmark_ipt2pt, BenchmarkSuite<BS_GENERIC>);
+        virtual void run(const scope_item &item) override; 
+        virtual void finalize() override;
+        virtual bool is_default() override { return false; }
+        DEFINE_INHERITED(AsyncBenchmark_calibration, BenchmarkSuite<BS_GENERIC>);
     };
 }

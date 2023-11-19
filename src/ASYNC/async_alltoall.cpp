@@ -46,7 +46,6 @@
 #include "async_cuda.h"
 
 namespace async_suite {
-
     void AsyncBenchmark_alltoall_base::init() {
         GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
         AsyncBenchmark::init();
@@ -92,12 +91,12 @@ namespace async_suite {
                 time += (t2 - t1);
             }
             barrier(rank, np, coll_comm);
-#if ASYNC_EXTRA_BARRIER
-            barrier(rank, np, coll_comm);
-            barrier(rank, np, coll_comm);
-            barrier(rank, np, coll_comm);
-            barrier(rank, np, coll_comm);
-#endif
+            if (EXTRA_BARRIER) {
+                barrier(rank, np, coll_comm);
+                barrier(rank, np, coll_comm);
+                barrier(rank, np, coll_comm);
+                barrier(rank, np, coll_comm);
+            }
         }
         time /= ncycles;
         MPI_Barrier(MPI_COMM_WORLD);
@@ -136,12 +135,12 @@ namespace async_suite {
                     total_calc_slowdown_ratio += local_calc_slowdown_ratio;
                 }
                 barrier(rank, np, coll_comm);
-#if ASYNC_EXTRA_BARRIER
-                barrier(rank, np, coll_comm);
-                barrier(rank, np, coll_comm);
-                barrier(rank, np, coll_comm);
-                barrier(rank, np, coll_comm);
-#endif
+                if (EXTRA_BARRIER) {
+                    barrier(rank, np, coll_comm);
+                    barrier(rank, np, coll_comm);
+                    barrier(rank, np, coll_comm);
+                    barrier(rank, np, coll_comm);
+                }
             }
         }
         time /= ncycles;

@@ -41,6 +41,7 @@
 
 #include "async_suite.h"
 #include "async_benchmark.h"
+#include "async_workload.h"
 
 namespace async_suite {
     class AsyncBenchmark_rma_pt2pt_base : public AsyncBenchmark {
@@ -62,7 +63,7 @@ namespace async_suite {
 
     class AsyncBenchmark_rma_ipt2pt : public AsyncBenchmark_rma_pt2pt_base {
         public:
-        AsyncBenchmark_calc calc;
+        AsyncBenchmark_workload calc;
         virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
         virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
         virtual void init() override;
