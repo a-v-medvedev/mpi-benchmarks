@@ -119,28 +119,26 @@ namespace async_suite {
         calc.reqs = request;
         calc.num_requests = 1;
         MPI_Status  status;
-        if (topo->is_active()) {
-            for (int i = 0; i < ncycles + nwarmup; i++) {
-                if (i >= nwarmup) t1 = MPI_Wtime();
-                sync_sbuf_with_device(i, b);
-                MPI_Ialltoall(get_sbuf(i, b), count, datatype, get_rbuf(i, b), count, datatype, coll_comm, request);
-                calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
-                MPI_Wait(request, &status);
-                sync_rbuf_with_device(i, b);
-                if (i >= nwarmup) {
-                    t2 = MPI_Wtime();
-                    time += (t2 - t1);
-                    total_ctime += local_ctime;
-                    total_tover_comm += local_tover_comm;
-                    total_calc_slowdown_ratio += local_calc_slowdown_ratio;
-                }
+        for (int i = 0; i < ncycles + nwarmup; i++) {
+            if (i >= nwarmup) t1 = MPI_Wtime();
+            sync_sbuf_with_device(i, b);
+            MPI_Ialltoall(get_sbuf(i, b), count, datatype, get_rbuf(i, b), count, datatype, coll_comm, request);
+            calc.benchmark(count, datatype, 0, 1, local_ctime, local_tover_comm, local_calc_slowdown_ratio);
+            MPI_Wait(request, &status);
+            sync_rbuf_with_device(i, b);
+            if (i >= nwarmup) {
+                t2 = MPI_Wtime();
+                time += (t2 - t1);
+                total_ctime += local_ctime;
+                total_tover_comm += local_tover_comm;
+                total_calc_slowdown_ratio += local_calc_slowdown_ratio;
+            }
+            barrier(rank, np, coll_comm);
+            if (EXTRA_BARRIER) {
                 barrier(rank, np, coll_comm);
-                if (EXTRA_BARRIER) {
-                    barrier(rank, np, coll_comm);
-                    barrier(rank, np, coll_comm);
-                    barrier(rank, np, coll_comm);
-                    barrier(rank, np, coll_comm);
-                }
+                barrier(rank, np, coll_comm);
+                barrier(rank, np, coll_comm);
+                barrier(rank, np, coll_comm);
             }
         }
         time /= ncycles;

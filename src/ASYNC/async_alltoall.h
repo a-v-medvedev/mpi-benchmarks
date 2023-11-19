@@ -55,8 +55,6 @@ namespace async_suite {
 
     class AsyncBenchmark_alltoall : public AsyncBenchmark_alltoall_base {
         public:
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         DEFINE_INHERITED(AsyncBenchmark_alltoall, BenchmarkSuite<BS_GENERIC>);
@@ -65,8 +63,6 @@ namespace async_suite {
     class AsyncBenchmark_ialltoall : public AsyncBenchmark_alltoall_base {
         public:
         AsyncBenchmark_workload calc;
-        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
-        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
         virtual void init() override;
         virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
         DEFINE_INHERITED(AsyncBenchmark_ialltoall, BenchmarkSuite<BS_GENERIC>);
