@@ -38,61 +38,32 @@
 */
 #pragma once
 
-#include <mpi.h>
-#include <string>
-#include <vector>
-#include <map>
-#include <set>
-#include <iostream>
-#include <fstream>
-
-#include "benchmark.h"
-#include "benchmark_suites_collection.h"
-#include "scope.h"
-#include "utils.h"
-
-#include "async_sys.h"
-#include "async_alloc.h"
+#include "async_suite.h"
+#include "async_benchmark.h"
+#include "async_workload.h"
 
 namespace async_suite {
+    class AsyncBenchmark_na2a_base : public AsyncBenchmark {
+        public:
+        MPI_Comm graph_comm;
+        int comm_size = 0;
+        virtual size_t buf_size_multiplier_send() override { assert(comm_size); return comm_size; }
+        virtual size_t buf_size_multiplier_recv() override { assert(comm_size); return comm_size; }
+        virtual void init() override;
+    };
 
-    enum gpu_mode_t { OFF, EXPLICIT, CUDAAWARE };
-    enum gpu_select_t { HWLOC, COREMAP, GENERIC };
-    static inline std::vector<std::string> remove_sync_tag(const std::vector<std::string> &benchs) {
-        std::vector<std::string> result;
-        std::set<std::string> s;
-        for (const auto &b : benchs) {
-            std::string bfiltered;
-            if (b.substr(0, 5) == "sync_")
-                bfiltered = b.substr(5, b.size() - 5);
-            else if (b.substr(0, 6) == "async_")
-                bfiltered = b.substr(6, b.size() - 6);
-            else
-                bfiltered = b;
-            s.insert(bfiltered);
-        }
-        result.assign(s.begin(), s.end());
-        return result;
-    }
+    class AsyncBenchmark_na2a : public AsyncBenchmark_na2a_base {
+        public:
+        virtual void init() override;
+        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
+        DEFINE_INHERITED(AsyncBenchmark_na2a, BenchmarkSuite<BS_GENERIC>);
+    };
 
-    template <class SUITE>
-	bool is_not_default(const std::string &name) {
-		std::shared_ptr<Benchmark> b = SUITE::get_instance().create(name);
-		if (b.get() == nullptr) {
-			return true;
-		}
-		return !b->is_default();
-	}
-
-    #include "benchmark_suite.h"
-  
+    class AsyncBenchmark_ina2a : public AsyncBenchmark_na2a_base {
+        public:
+        AsyncBenchmark_workload calc;
+        virtual void init() override;
+        virtual bool benchmark(int count, MPI_Datatype datatype, int nwarmup, int ncycles, double &time, double &tover_comm, double &tover_calc) override;
+        DEFINE_INHERITED(AsyncBenchmark_ina2a, BenchmarkSuite<BS_GENERIC>);
+    };
 }
-
-#define HANDLE_PARAMETER(TYPE, NAME) if (key == #NAME) { \
-                                            result = std::shared_ptr< TYPE >(&NAME, []( TYPE *){}); \
-                                         }
-
-#define GET_PARAMETER(TYPE, NAME) TYPE *p_##NAME = suite->get_parameter(#NAME).as< TYPE >(); \
-                                                                                     assert(p_##NAME != NULL); \
-                                  TYPE &NAME = *p_##NAME;
-

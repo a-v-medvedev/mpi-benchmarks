@@ -34,9 +34,12 @@ Here the `<mpi-c++-wrapper>` denotes the actual MPI wrapper for C++ compiler. Th
 
 The individual benchmarks include:
 - `sync_pt2p2`, `async_pt2pt` -- point-to-point benchmark where each rank exchanges with a predefined set of other ranks. Communications peers are defined by the topology, described [below](#topology-options). Synchronous variant utilizes `MPI_Send()`/`MPI_Recv()` function calls. The asynchronous variant uses an equivalent `MPI_Isend()`/`MPI_Irev()`/`MPI_Wait()` combination, and CPU/GPU calculation workload is optionally called before `MPI_Wait()` call to simulate communication/computation overlap. The calculation workload options are described [below](#calculation-workload-options).
-- `sync_allreduce`, `async_allreduce` --  `MPI_Allreduce()` and `MPI_Iallreduce()`/`MPI_Wait()` benchmarks for the whole `MPI_COMM_WORLD` communicator or split subcommunicators, as it is defined by the topology. Calculation workload is optionally called before `MPI_Wait()` call.
 - `sync_na2a`, `async_na2a` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the neighborhood all-to-all collective operation. The topology is simply mapped to `MPI_Dist_graph_create_adjacent()`. The communication itself is implemented with a single `MPI_Neighbor_alltoall()` call for the synchronous variant and with `MPI_Ineighbor_alltoall()`/`MPI_Wait()` combination for the asynchronous one. Calculation workload is optionally called before `MPI_Wait()` call.
 - `sync_rma_pt2pt`, `async_rma_pt2pt` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the one-sided communication MPI functions. This is simply a one-sided communication version of the `sync_pt2pt`/`async_pt2pt` benchmark pair. Implemented with one-sided `MPI_Get()/MPI_Put()` pair in lock/unlock semantics; the `MPI_Rget()`/`MPI_Wait()` is used in an asynchronous variant. Calculation workload is optionally called before `MPI_Wait()`.
+- `sync_allreduce`, `async_allreduce` --  `MPI_Allreduce()` and `MPI_Iallreduce()`/`MPI_Wait()` benchmarks for the whole `MPI_COMM_WORLD` communicator or split subcommunicators, as it is defined by the topology. Calculation workload is optionally called before `MPI_Wait()` call.
+- `sync_alltoall`, `async_alltoall` --  `MPI_Alltoall()` and `MPI_Ialltoall()`/`MPI_Wait()` benchmarks for the whole `MPI_COMM_WORLD` communicator or split subcommunicators, as it is defined by the topology. Calculation workload is optionally called before `MPI_Wait()` call.
+
+
 
 ## Topology options
 
@@ -67,7 +70,7 @@ All of the communication topologies from the list below make sense for the bench
 
 ### Collective style topologies
 
-The topologies listed below are meaningful for collective communication benchmarks: `sync_allreduce`, `async_allreduce`.
+The topologies listed below are meaningful for collective communication benchmarks: `sync_allreduce`, `async_allreduce`, .`sync_alltoall`, `async_alltoall`. 
 
 - `split` -- is the way to split the `MPI_COMM_WORLD` communicator into separate groups so that the collective communication happens within each of those sections independently. The collective communication function that is measured on this rank topology depends on the specific benchmark. The parameters that tune this topology are:
 
@@ -85,7 +88,7 @@ The topologies listed below are meaningful for collective communication benchmar
 
 ### Setting up the topology options
 
-The topology and its parameters are defined for each benchmark separately. The command line (or equivalent YAML-file) option is: `-BENCH_params`, where `BENCH` stands for one of the short benchmark names: `pt2pt`, `na2a`, `rma_pt2pt`, `allreduce`. The parameter values for these options are the list of definitions in the form: `keyword=value:keyword=value:...`, where the keyword is either `topology` to denote the communication topology or the parameter names for a selected topology. For example:
+The topology and its parameters are defined for each benchmark separately. The command line (or equivalent YAML-file) option is: `-BENCH_params`, where `BENCH` stands for one of the short benchmark names: `pt2pt`, `na2a`, `rma_pt2pt`, `allreduce`, `alltoall`. The parameter values for these options are the list of definitions in the form: `keyword=value:keyword=value:...`, where the keyword is either `topology` to denote the communication topology or the parameter names for a selected topology. For example:
 
 * Option: `-pt2pt_params topology=ping-pong:stride=1:bidirectional=false` sets up the `ping-pong` pairwise topology for both `sync_pt2pt` and `async_pt2pt` benchmarks, and defines the parameters of it
 * Option: `-allreduce_params topology=split:combination=separate:nparts=2` sets up the `separate` topology for both `sync_allreduce` and `async_allreduce` benchmarks.
