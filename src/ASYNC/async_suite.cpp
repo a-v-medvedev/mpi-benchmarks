@@ -225,7 +225,6 @@ namespace async_suite {
         }
     }
 
-
     template <> void BenchmarkSuite<BS_GENERIC>::get_bench_list(std::vector<std::string> &benchs,
                                           BenchmarkSuiteBase::BenchListFilter filter) const {
 		get_full_list(benchs);
@@ -263,5 +262,4 @@ namespace async_suite {
         HANDLE_PARAMETER(gpu_select_t, gpu_selection_mode); 
         return result;
     }
-
 }

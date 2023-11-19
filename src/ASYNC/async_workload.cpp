@@ -70,7 +70,7 @@ namespace async_suite {
 #endif        
     }
 
-    // NOTE: to ensure just calc, no manual progress call it with iters_till_test == R
+    // NOTE: to ensure just calc, no manual progress call it with iters_till_test == ncalccycles
     // NOTE2: tover_comm is not zero'ed here before operation!
     void AsyncBenchmark_workload::calc_and_progress_loop(int ncalccycles, int iters_till_test, double &tover_comm) {
         gpu_calc_cycle_active = true;
@@ -108,6 +108,7 @@ namespace async_suite {
     }
 
     void AsyncBenchmark_workload::calc_loop(int ncalccycles, double &tover_comm) {
+        // This form of call just switches off the manual progress
         calc_and_progress_loop(ncalccycles, ncalccycles, tover_comm);
     }
 

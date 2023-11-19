@@ -46,7 +46,6 @@
 #include "async_cuda.h"
 
 namespace async_suite {
-
     void AsyncBenchmark_na2a_base::init() {
         GET_PARAMETER(params::dictionary<params::benchmarks_params>, p);
         AsyncBenchmark::init();

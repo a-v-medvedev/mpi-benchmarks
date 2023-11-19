@@ -55,7 +55,6 @@
 #include "async_alloc.h"
 
 namespace async_suite {
-
     enum gpu_mode_t { OFF, EXPLICIT, CUDAAWARE };
     enum gpu_select_t { HWLOC, COREMAP, GENERIC };
     static inline std::vector<std::string> remove_sync_tag(const std::vector<std::string> &benchs) {
