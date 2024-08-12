@@ -17,6 +17,7 @@ function unpack() {
     cd argsparser-$ARGSPARSER_VERSION
     [ ! -e yaml-cpp -a ! -L yaml-cpp ] && ln -s ../yaml-cpp yaml-cpp 
     cd ..
+    sed -i '/target_compile_options(yaml-cpp/,+15d' yaml-cpp-yaml-cpp-$YAML_VERSION/CMakeLists.txt
 }
 
 function build() {
@@ -24,7 +25,7 @@ function build() {
     [ -e build ] && rm -rf build
     mkdir -p build
     cd build
-    cmake -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF .. -DCMAKE_INSTALL_PREFIX=$PWD/../../yaml-cpp
+    cmake -DYAML_BUILD_SHARED_LIBS=OFF -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF .. -DCMAKE_INSTALL_PREFIX=$PWD/../../yaml-cpp
     make clean
     make -j
     make install

@@ -49,5 +49,8 @@ override LDFLAGS += -lcuda
 BENCHMARK_SUITE_SRC += ASYNC/async_cuda.cu ASYNC/async_mpi.cpp
 endif
 
-override CXXFLAGS += -IASYNC/thirdparty/argsparser.bin -IASYNC/thirdparty/yaml-cpp.bin/include
-override LDFLAGS += ASYNC/thirdparty/argsparser.bin/libargsparser.a ASYNC/thirdparty/yaml-cpp.bin/lib/libyaml-cpp.a
+ifeq ($(IMB_THIRDPARTY_DIR),)
+IMB_THIRDPARTY_DIR=ASYNC/thirdparty
+endif	
+override CXXFLAGS += -I$(IMB_THIRDPARTY_DIR)/argsparser.bin -I$(IMB_THIRDPARTY_DIR)/yaml-cpp.bin/include
+override LDFLAGS += $(IMB_THIRDPARTY_DIR)/argsparser.bin/libargsparser.a $(IMB_THIRDPARTY_DIR)/yaml-cpp.bin/lib/libyaml-cpp.a
