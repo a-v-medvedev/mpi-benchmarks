@@ -58,10 +58,10 @@ override CPPFLAGS += -I.
 
 
 override CFLAGS += -O1 -Wall -Wno-long-long
-override CXXFLAGS += -O1 -Wall -Wextra -pedantic -Wno-long-long -std=c++11
+override CXXFLAGS += -O1 -Wall -Wextra -pedantic -Wno-long-long -std=c++17
 
 #override CFLAGS += -O0 -g -Wall -Wno-long-long
-#override CXXFLAGS += -O0 -g -Wall -Wextra -pedantic -Wno-long-long -std=c++11
+#override CXXFLAGS += -O0 -g -Wall -Wextra -pedantic -Wno-long-long -std=c++17
 
 ifdef WITH_OPENMP
 override CFLAGS += -fopenmp

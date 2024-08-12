@@ -267,8 +267,10 @@ struct topo_halo : public topohelper {
     int required_nranks;
     template <typename integer>
         integer gcd(integer a, integer b) {
-            if (a < 0) a = -a;
-            if (b < 0) b = -b;
+	    if constexpr (std::is_signed<integer>()) {
+	        a = std::abs(a);
+	        b = std::abs(b);
+	    }
             if (a == 0) return b;
             while (b != 0) {
                 integer remainder = a % b;

@@ -25,7 +25,7 @@ The benchmark requires two small libraries for command line and config parsing. 
 
 So benchmark build is a two-step process:
 
-- `cd src/ASYNC/thrirdparty; ./download-and-build.sh`
+- `cd src/ASYNC/thrirdparty; ./download-and-build.sh; cd -`
 - `make CXX=<mpi-c++-wrapper> [WITH_CUDA=TRUE]`
 
 Here the `<mpi-c++-wrapper>` denotes the actual MPI wrapper for C++ compiler. The default value for `CXX` is `mpicxx`.
@@ -33,7 +33,7 @@ Here the `<mpi-c++-wrapper>` denotes the actual MPI wrapper for C++ compiler. Th
 ## Benchmark groups
 
 The individual benchmarks include:
-- `sync_pt2p2`, `async_pt2pt` -- point-to-point benchmark where each rank exchanges with a predefined set of other ranks. Communications peers are defined by the topology, described [below](#topology-options). Synchronous variant utilizes `MPI_Send()`/`MPI_Recv()` function calls. The asynchronous variant uses an equivalent `MPI_Isend()`/`MPI_Irev()`/`MPI_Wait()` combination, and CPU/GPU calculation workload is optionally called before `MPI_Wait()` call to simulate communication/computation overlap. The calculation workload options are described [below](#calculation-workload-options).
+- `sync_pt2pt`, `async_pt2pt` -- point-to-point benchmark where each rank exchanges with a predefined set of other ranks. Communications peers are defined by the topology, described [below](#topology-options). Synchronous variant utilizes `MPI_Send()`/`MPI_Recv()` function calls. The asynchronous variant uses an equivalent `MPI_Isend()`/`MPI_Irev()`/`MPI_Wait()` combination, and CPU/GPU calculation workload is optionally called before `MPI_Wait()` call to simulate communication/computation overlap. The calculation workload options are described [below](#calculation-workload-options).
 - `sync_na2a`, `async_na2a` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the neighborhood all-to-all collective operation. The topology is simply mapped to `MPI_Dist_graph_create_adjacent()`. The communication itself is implemented with a single `MPI_Neighbor_alltoall()` call for the synchronous variant and with `MPI_Ineighbor_alltoall()`/`MPI_Wait()` combination for the asynchronous one. Calculation workload is optionally called before `MPI_Wait()` call.
 - `sync_rma_pt2pt`, `async_rma_pt2pt` -- the same idea as in point-to-point benchmark where each rank exchanges with a predefined number of other ranks, is implemented using the one-sided communication MPI functions. This is simply a one-sided communication version of the `sync_pt2pt`/`async_pt2pt` benchmark pair. Implemented with one-sided `MPI_Get()/MPI_Put()` pair in lock/unlock semantics; the `MPI_Rget()`/`MPI_Wait()` is used in an asynchronous variant. Calculation workload is optionally called before `MPI_Wait()`.
 - `sync_allreduce`, `async_allreduce` --  `MPI_Allreduce()` and `MPI_Iallreduce()`/`MPI_Wait()` benchmarks for the whole `MPI_COMM_WORLD` communicator or split subcommunicators, as it is defined by the topology. Calculation workload is optionally called before `MPI_Wait()` call.
